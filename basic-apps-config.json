@@ -1,0 +1,79 @@
+{
+  "applications": [
+    {
+      "name": "googlechrome",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "microsoft-edge",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "firefox",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "brave",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "notepadplusplus",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "foxitreader",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "dotnet3.5",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "patch-my-pc",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "unikey",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "7zip",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "winrar",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "vlc",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "revo-uninstaller",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "winaero-tweaker",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "powertoys",
+      "version": null,
+      "params": []
+    }
+  ]
+}

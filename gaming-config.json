@@ -1,0 +1,54 @@
+{
+  "applications": [
+    {
+      "name": "steam",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "epicgameslauncher",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "discord",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "obs-studio",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "geforce-experience",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "msiafterburner",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "hwinfo",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "crystaldiskinfo",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "vlc",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "cpu-z",
+      "version": null,
+      "params": []
+    }
+  ]
+}

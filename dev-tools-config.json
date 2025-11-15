@@ -1,0 +1,79 @@
+{
+  "applications": [
+    {
+      "name": "vscode",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "git",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "github-desktop",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "nodejs-lts",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "python",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "docker-desktop",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "curl",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "wget",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "powershell-core",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "pswindowsupdate",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "chocolatey",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "wsl2",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "microsoft-windows-terminal",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "vscode-python",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "notepadplusplus",
+      "version": null,
+      "params": []
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "applications": [
+    {
+      "name": "microsoft-teams",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "zoom",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "slack",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "zalopc",
+      "version": null,
+      "params": []
+    },
+    {
+      "name": "telegram",
+      "version": null,
+      "params": []
+    }
+  ]
+}
