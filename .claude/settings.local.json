@@ -5,7 +5,8 @@
       "Bash(dir:*)",
       "Bash(powershell.exe -File install-apps.ps1)",
       "Bash(powershell.exe -File install-from-config.ps1)",
-      "Bash(powershell.exe:*)"
+      "Bash(powershell.exe:*)",
+      "Bash(if not exist .vscode mkdir .vscode)"
     ],
     "deny": [],
     "ask": []

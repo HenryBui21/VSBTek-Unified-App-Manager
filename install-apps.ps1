@@ -1,4 +1,4 @@
-# Chocolatey Applications Installer Script (Smart Mode)
+﻿# Chocolatey Applications Installer Script (Smart Mode)
 # This script can be executed remotely using: irm <url> | iex
 # Or with JSON config: .\install-apps.ps1 -ConfigFile "apps-config.json"
 # Author: VSBTek
@@ -39,22 +39,22 @@ function Write-ColorOutput {
 
 function Write-Success {
     param([string]$Message)
-    Write-ColorOutput "✓ $Message" -Color Green
+    Write-ColorOutput "[OK] $Message" -Color Green
 }
 
 function Write-ErrorMsg {
     param([string]$Message)
-    Write-ColorOutput "✗ $Message" -Color Red
+    Write-ColorOutput "[ERROR] $Message" -Color Red
 }
 
 function Write-Info {
     param([string]$Message)
-    Write-ColorOutput "→ $Message" -Color Cyan
+    Write-ColorOutput "[INFO] $Message" -Color Cyan
 }
 
 function Write-WarningMsg {
     param([string]$Message)
-    Write-ColorOutput "⚠ $Message" -Color Yellow
+    Write-ColorOutput "[WARNING] $Message" -Color Yellow
 }
 
 # Check if running as Administrator
