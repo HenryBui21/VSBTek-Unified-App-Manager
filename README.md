@@ -37,12 +37,19 @@ A powerful and user-friendly PowerShell script for automated application install
    .\install-apps.ps1
    ```
 
-### Method 2: Remote Execution (irm | iex)
+### Method 2: Remote Execution from Web (Recommended)
 
-Execute directly from a URL without downloading:
+Execute directly from VSBTek Scripts website:
 
 ```powershell
-irm https://raw.githubusercontent.com/yourusername/chocolatey-script/main/install-apps.ps1 | iex
+# Interactive mode - shows menu to select preset
+irm https://scripts.vsbtek.com/install | iex
+
+# Or install specific preset directly:
+irm https://scripts.vsbtek.com/install | iex -Preset basic
+irm https://scripts.vsbtek.com/install | iex -Preset dev
+irm https://scripts.vsbtek.com/install | iex -Preset community
+irm https://scripts.vsbtek.com/install | iex -Preset gaming
 ```
 
 ⚠️ **Security Warning**: Only execute scripts from trusted sources when using remote execution!
@@ -311,16 +318,63 @@ refreshenv
 choco source add -n=private-repo -s="https://your-private-repo.com/nuget"
 ```
 
+## Web Installer Details
+
+The `install-from-web.ps1` script is designed for remote execution from `https://scripts.vsbtek.com/install`.
+
+### Key Features:
+- **Auto-elevation**: Automatically requests Administrator privileges
+- **Preset selection**: Interactive menu or direct parameter
+- **GitHub-based configs**: Downloads JSON configs from GitHub repository
+- **No local files needed**: Everything runs from memory
+- **Single file deployment**: Only one file to upload to your website
+- **Auto-update**: Configs are always fresh from GitHub
+
+### Available Presets:
+- `basic` - Basic Apps (browsers, utilities, etc.)
+- `dev` - Development Tools (IDEs, Git, Docker, etc.)
+- `community` - Community Apps (Teams, Zoom, Slack, etc.)
+- `gaming` - Gaming (Steam, Discord, OBS, etc.)
+
+### How It Works:
+1. Script downloaded from `scripts.vsbtek.com/install`
+2. Checks for Administrator privileges (auto-elevates if needed)
+3. Shows interactive menu or uses `-Preset` parameter
+4. Downloads JSON config from GitHub repository
+5. Displays list of applications to be installed
+6. Asks for confirmation
+7. Installs Chocolatey if not present
+8. Installs all applications from the preset
+9. Shows installation summary
+
+### Deployment:
+
+Upload only **ONE** file to your website:
+- `install-from-web.ps1` → `https://scripts.vsbtek.com/install`
+
+All configuration files are automatically loaded from:
+- GitHub: `https://github.com/HenryBui21/VSBTek-Chocolatey-Installer`
+
+See `/Docs/DEPLOY-TO-WEB.md` for detailed deployment instructions.
+
 ## File Structure
 
 ```
-Chocolatey_Script/
-├── install-apps.ps1              # Smart installer (supports both modes)
+VSBTek-Chocolatey-Installer/
+├── install-apps.ps1              # Local installer with interactive menu
+├── install-from-web.ps1          # Web installer (upload to scripts.vsbtek.com/install)
 ├── manage-apps.ps1               # Advanced management script
 ├── basic-apps-config.json        # Basic applications preset (15 apps)
 ├── community-config.json         # Communication tools preset (5 apps)
 ├── dev-tools-config.json         # Developer tools preset (15 apps)
 ├── gaming-config.json            # Gaming applications preset (10 apps)
+├── Docs/                         # Documentation
+│   ├── DEPLOY-TO-WEB.md         # Deployment guide
+│   ├── CHECKLIST.md             # Deployment checklist
+│   ├── HUONG-DAN.md             # Vietnamese user guide
+│   └── DEPLOYMENT.md            # Detailed deployment instructions
+├── .vscode/                      # VSCode settings
+│   └── settings.json            # File encoding configuration
 ├── .gitignore                    # Git ignore rules
 ├── LICENSE                       # MIT License
 └── README.md                     # This file
