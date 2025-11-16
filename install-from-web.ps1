@@ -10,7 +10,10 @@
 
 param(
     [Parameter(Mandatory=$false)]
-    [string]$Preset = $null
+    [string]$Preset = $null,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$KeepWindowOpen = $false
 )
 
 # ============================================================================
@@ -30,12 +33,26 @@ $ScriptUrl = "https://scripts.vsbtek.com/install"
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
 
-    $arguments = "-NoProfile -ExecutionPolicy Bypass -Command `"& {irm $ScriptUrl | iex"
-    if ($Preset) {
-        $arguments += " -Preset $Preset"
-    }
-    $arguments += "}`""
+    # Determine if running from file or from web (piped)
+    $runningFromFile = $MyInvocation.MyCommand.Path -ne $null -and $MyInvocation.MyCommand.Path -ne ''
 
+    if ($runningFromFile) {
+        # Running from a file - use the file path directly
+        $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`""
+        if ($Preset) {
+            $arguments += " -Preset `"$Preset`""
+        }
+        $arguments += " -KeepWindowOpen"
+    } else {
+        # Running from web (irm | iex) - download fresh copy
+        $arguments = "-NoProfile -ExecutionPolicy Bypass -Command `"irm $ScriptUrl | iex"
+        if ($Preset) {
+            $arguments += " -Preset '$Preset'"
+        }
+        $arguments += " -KeepWindowOpen`""
+    }
+
+    # Start elevated process
     Start-Process PowerShell.exe -ArgumentList $arguments -Verb RunAs
     exit
 }
@@ -288,6 +305,12 @@ if ($failCount -eq 0) {
     Write-WarningMsg "Some applications failed to install. Please check the logs above."
 }
 
+# Keep window open if requested (for auto-elevated sessions)
+if ($KeepWindowOpen) {
+    Write-Host ""
+    Read-Host "Press Enter to close this window"
+}
+
 <#
 .SYNOPSIS
     Remote web installer for VSBTek Chocolatey presets
@@ -299,6 +322,10 @@ if ($failCount -eq 0) {
 .PARAMETER Preset
     Optional. Preset to install: basic, dev, community, or gaming
     If not specified, an interactive menu will be shown.
+
+.PARAMETER KeepWindowOpen
+    Optional. Keeps the PowerShell window open after installation completes.
+    Automatically set when auto-elevating to administrator privileges.
 
 .EXAMPLE
     irm https://scripts.vsbtek.com/install | iex
