@@ -41,16 +41,6 @@
       "params": []
     },
     {
-      "name": "vlc",
-      "version": null,
-      "params": []
-    },
-    {
-      "name": "7zip",
-      "version": null,
-      "params": []
-    },
-    {
       "name": "java-runtime",
       "version": null,
       "params": []
