@@ -46,6 +46,11 @@
       "params": []
     },
     {
+      "name": "treesizefree",
+      "version": null,
+      "params": []
+    },
+    {
       "name": "patch-my-pc",
       "version": null,
       "params": ["--ignore-checksums"]
