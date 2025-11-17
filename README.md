@@ -8,6 +8,10 @@ Công cụ PowerShell tự động cài đặt và quản lý ứng dụng Windo
 
 **Cách 1: One-liner siêu ngắn (Nhanh nhất)** ⚡
 ```powershell
+# Từ GitHub (Hoạt động ngay)
+irm https://raw.githubusercontent.com/HenryBui21/VSBTek-Chocolatey-Installer/main/quick-install.ps1 | iex
+
+# Hoặc từ scripts.vsbtek.com (nếu đã cấu hình)
 irm https://scripts.vsbtek.com/quick-install.ps1 | iex
 ```
 ✅ **Khuyên dùng** - Lệnh ngắn gọn nhất, tự động tải và chạy interactive mode
