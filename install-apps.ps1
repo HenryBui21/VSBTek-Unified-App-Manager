@@ -4,11 +4,11 @@
 # Repository: https://github.com/HenryBui21/VSBTek-Chocolatey-Installer
 #
 # Usage:
-#   Local interactive:     .\install-chocolatey.ps1
-#   Local with config:     .\install-chocolatey.ps1 -ConfigFile "basic-apps-config.json"
-#   Management mode:       .\install-chocolatey.ps1 -Action Update
-#   Remote interactive:    iex "& { $(irm https://scripts.vsbtek.com/install) }"
-#   Remote with preset:    iex "& { $(irm https://scripts.vsbtek.com/install) } -Preset basic -Mode remote"
+#   Local interactive:     .\install-apps.ps1
+#   Local with config:     .\install-apps.ps1 -ConfigFile "basic-apps-config.json"
+#   Management mode:       .\install-apps.ps1 -Action Update
+#   Remote interactive:    iex "& { $(irm https://scripts.vsbtek.com/install-apps.ps1) }"
+#   Remote with preset:    iex "& { $(irm https://scripts.vsbtek.com/install-apps.ps1) } -Preset basic -Mode remote"
 
 param(
     [Parameter(Mandatory=$false)]
@@ -845,31 +845,31 @@ if ($KeepWindowOpen) {
     Keep PowerShell window open after completion (useful for elevated sessions)
 
 .EXAMPLE
-    .\install-chocolatey.ps1
+    .\install-apps.ps1
     Interactive mode with menus
 
 .EXAMPLE
-    .\install-chocolatey.ps1 -Preset basic
+    .\install-apps.ps1 -Preset basic
     Install basic apps preset
 
 .EXAMPLE
-    .\install-chocolatey.ps1 -Action Update -ConfigFile "dev-tools-config.json"
+    .\install-apps.ps1 -Action Update -ConfigFile "dev-tools-config.json"
     Update applications from dev tools config
 
 .EXAMPLE
-    .\install-chocolatey.ps1 -Action List -Preset gaming
+    .\install-apps.ps1 -Action List -Preset gaming
     List installation status of gaming apps
 
 .EXAMPLE
-    .\install-chocolatey.ps1 -Action Upgrade
+    .\install-apps.ps1 -Action Upgrade
     Upgrade all Chocolatey packages
 
 .EXAMPLE
-    irm https://scripts.vsbtek.com/install | iex
+    iex "& { $(irm https://scripts.vsbtek.com/install-apps.ps1) }"
     Remote execution with interactive menu
 
 .EXAMPLE
-    iex "& { $(irm https://scripts.vsbtek.com/install) } -Preset basic -Mode remote"
+    iex "& { $(irm https://scripts.vsbtek.com/install-apps.ps1) } -Preset basic -Mode remote"
     Remote execution with basic preset
 
 .NOTES

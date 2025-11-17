@@ -6,32 +6,32 @@ Công cụ PowerShell tự động cài đặt và quản lý ứng dụng Windo
 
 ### Từ Web (Khuyên dùng)
 
-Truy cập [scripts.vsbtek.com](https://scripts.vsbtek.com) và chọn **install-chocolatey.ps1**, hoặc:
+Truy cập [scripts.vsbtek.com](https://scripts.vsbtek.com) và chọn **install-apps.ps1**, hoặc:
 
 ```powershell
 # Interactive mode với menu
-iex "& { $(irm https://scripts.vsbtek.com/install) }"
+iex "& { $(irm https://scripts.vsbtek.com/install-apps.ps1) }"
 
 # Cài đặt trực tiếp với preset
-iex "& { $(irm https://scripts.vsbtek.com/install) } -Preset basic -Mode remote"
+iex "& { $(irm https://scripts.vsbtek.com/install-apps.ps1) } -Preset basic -Mode remote"
 ```
 
 ### Từ Local
 
 ```powershell
 # Interactive mode với menu
-.\install-chocolatey.ps1
+.\install-apps.ps1
 
 # Cài đặt với preset
-.\install-chocolatey.ps1 -Preset basic
+.\install-apps.ps1 -Preset basic
 
 # Cài đặt với config file tùy chỉnh
-.\install-chocolatey.ps1 -ConfigFile "my-apps.json"
+.\install-apps.ps1 -ConfigFile "my-apps.json"
 
 # Quản lý ứng dụng
-.\install-chocolatey.ps1 -Action Update -Preset dev
-.\install-chocolatey.ps1 -Action List -Preset gaming
-.\install-chocolatey.ps1 -Action Upgrade
+.\install-apps.ps1 -Action Update -Preset dev
+.\install-apps.ps1 -Action List -Preset gaming
+.\install-apps.ps1 -Action Upgrade
 ```
 
 ⚠️ **Lưu ý**: Script tự động yêu cầu quyền Administrator khi cần.
@@ -78,54 +78,54 @@ Gaming platform và tiện ích:
 
 ```powershell
 # Interactive - chọn preset từ menu
-.\install-chocolatey.ps1
+.\install-apps.ps1
 
 # Cài preset cụ thể
-.\install-chocolatey.ps1 -Preset basic
-.\install-chocolatey.ps1 -Preset dev
-.\install-chocolatey.ps1 -Preset community
-.\install-chocolatey.ps1 -Preset gaming
+.\install-apps.ps1 -Preset basic
+.\install-apps.ps1 -Preset dev
+.\install-apps.ps1 -Preset community
+.\install-apps.ps1 -Preset gaming
 
 # Cài từ config file tùy chỉnh
-.\install-chocolatey.ps1 -ConfigFile "my-apps.json"
+.\install-apps.ps1 -ConfigFile "my-apps.json"
 
 # Cài từ remote (GitHub)
-.\install-chocolatey.ps1 -Preset basic -Mode remote
+.\install-apps.ps1 -Preset basic -Mode remote
 ```
 
 ### 2. Update Mode
 
 ```powershell
 # Cập nhật tất cả apps trong preset
-.\install-chocolatey.ps1 -Action Update -Preset dev
+.\install-apps.ps1 -Action Update -Preset dev
 
 # Cập nhật từ config file
-.\install-chocolatey.ps1 -Action Update -ConfigFile "dev-tools-config.json"
+.\install-apps.ps1 -Action Update -ConfigFile "dev-tools-config.json"
 ```
 
 ### 3. Uninstall Mode
 
 ```powershell
 # Gỡ cài đặt apps trong preset
-.\install-chocolatey.ps1 -Action Uninstall -Preset gaming
+.\install-apps.ps1 -Action Uninstall -Preset gaming
 
 # Gỡ cài đặt với force
-.\install-chocolatey.ps1 -Action Uninstall -Preset community -Force
+.\install-apps.ps1 -Action Uninstall -Preset community -Force
 ```
 
 ### 4. List Mode
 
 ```powershell
 # Liệt kê trạng thái cài đặt
-.\install-chocolatey.ps1 -Action List -Preset basic
-.\install-chocolatey.ps1 -Action List -ConfigFile "gaming-config.json"
+.\install-apps.ps1 -Action List -Preset basic
+.\install-apps.ps1 -Action List -ConfigFile "gaming-config.json"
 ```
 
 ### 5. Upgrade Mode
 
 ```powershell
 # Nâng cấp TẤT CẢ Chocolatey packages
-.\install-chocolatey.ps1 -Action Upgrade
+.\install-apps.ps1 -Action Upgrade
 ```
 
 ## Tùy chỉnh Config
@@ -178,7 +178,7 @@ Format file JSON:
 
 ```
 VSBTek-Chocolatey-Installer/
-├── install-chocolatey.ps1        # Script chính (all-in-one)
+├── install-apps.ps1              # Script chính (all-in-one)
 ├── basic-apps-config.json        # 18 ứng dụng cơ bản
 ├── dev-tools-config.json         # 15 dev tools
 ├── community-config.json         # 5 ứng dụng giao tiếp
