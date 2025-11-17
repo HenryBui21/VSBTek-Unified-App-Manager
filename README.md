@@ -1,181 +1,87 @@
-# Chocolatey Application Installer
+# VSBTek Chocolatey Installer
 
-A powerful and user-friendly PowerShell script for automated application installation using Chocolatey package manager on Windows.
+Công cụ PowerShell tự động cài đặt ứng dụng Windows qua Chocolatey với hỗ trợ remote execution và preset configurations.
 
-## Features
+## Cài đặt nhanh
 
-- ✅ **Automatic Chocolatey Installation** - Installs Chocolatey if not present
-- ✅ **Batch Application Installation** - Install multiple applications at once
-- ✅ **JSON Configuration Support** - Easy-to-manage application lists
-- ✅ **Remote Execution** - Run via `irm | iex` for quick deployment
-- ✅ **Version Control** - Specify exact versions for applications
-- ✅ **Custom Parameters** - Pass installation parameters to packages
-- ✅ **Error Handling** - Robust error detection and reporting
-- ✅ **Colorful Output** - Visual feedback with color-coded messages
-- ✅ **Administrator Check** - Ensures proper permissions
-- ✅ **Installation Summary** - Detailed success/failure statistics
+### Từ Web (Khuyên dùng)
 
-## Prerequisites
-
-- Windows 10/11 or Windows Server 2016+
-- PowerShell 5.1 or higher
-- Administrator privileges
-- Internet connection
-
-## Quick Start
-
-### Method 1: Local Execution
-
-1. Download the script:
-   ```powershell
-   git clone https://github.com/yourusername/chocolatey-script.git
-   cd chocolatey-script
-   ```
-
-2. Run the basic installer:
-   ```powershell
-   .\install-apps.ps1
-   ```
-
-### Method 2: Remote Execution from Web (Recommended)
-
-Execute directly from VSBTek Scripts website:
+Truy cập [scripts.vsbtek.com](https://scripts.vsbtek.com) và chọn **install-apps.ps1**, hoặc:
 
 ```powershell
-# Interactive mode - shows menu to select preset
-irm https://scripts.vsbtek.com/install | iex
-
-# Or install specific preset directly:
-iex "& { $(irm https://scripts.vsbtek.com/install) } -Preset basic"
-iex "& { $(irm https://scripts.vsbtek.com/install) } -Preset dev"
-iex "& { $(irm https://scripts.vsbtek.com/install) } -Preset community"
-iex "& { $(irm https://scripts.vsbtek.com/install) } -Preset gaming"
+irm https://scripts.vsbtek.com/install-apps.ps1 | iex
 ```
 
-⚠️ **Security Warning**: Only execute scripts from trusted sources when using remote execution!
-
-### Method 3: Using Preset Configurations
+### Từ Local
 
 ```powershell
-# Basic applications (browsers, utilities, etc.)
-.\install-apps.ps1 -ConfigFile "basic-apps-config.json"
-
-# Developer tools
-.\install-apps.ps1 -ConfigFile "dev-tools-config.json"
-
-# Gaming applications
-.\install-apps.ps1 -ConfigFile "gaming-config.json"
-
-# Communication tools
-.\install-apps.ps1 -ConfigFile "community-config.json"
-```
-
-## Usage Examples
-
-### Install Default Applications
-
-```powershell
-# Installs: Chrome, Firefox, VSCode, 7-Zip, Git, Notepad++
+# Chạy với menu chọn preset
 .\install-apps.ps1
-```
 
-### Install Custom Application List
-
-```powershell
-# Edit the script and customize the $Applications array
-Install-Applications -Applications @(
-    @{ Name = 'googlechrome'; Version = $null; Params = @() },
-    @{ Name = 'python'; Version = '3.11.0'; Params = @('--params', '/InstallDir:C:\Python311') },
-    @{ Name = 'nodejs'; Version = $null; Params = @() }
-)
-```
-
-### Using Preset Configurations
-
-```powershell
-# Install basic applications (browsers, 7-Zip, VLC, etc.)
+# Hoặc chỉ định config file
 .\install-apps.ps1 -ConfigFile "basic-apps-config.json"
-
-# Install developer tools (VSCode, Git, Docker, Python, etc.)
-.\install-apps.ps1 -ConfigFile "dev-tools-config.json"
-
-# Install communication tools (Teams, Zoom, Slack, etc.)
-.\install-apps.ps1 -ConfigFile "community-config.json"
-
-# Install gaming applications (Steam, Discord, OBS, etc.)
-.\install-apps.ps1 -ConfigFile "gaming-config.json"
 ```
 
-### Using Advanced Management Script
+⚠️ **Lưu ý**: Script tự động yêu cầu quyền Administrator khi cần.
+
+## Preset có sẵn
+
+### 🔧 Basic Apps (18 ứng dụng)
+
+Trình duyệt, công cụ nén, PDF reader, tiện ích Windows:
+
+- **Browsers**: Chrome, Edge, Firefox, Brave
+- **Utilities**: 7-Zip, WinRAR, VLC, Notepad++, PowerToys, Revo Uninstaller
+- **Tools**: Foxit Reader, TreeSize Free, UltraViewer, Patch My PC, Winaero Tweaker
+- **Language**: UniKey
+- **Runtime**: .NET 3.5, .NET 8.0 Desktop Runtime
+
+### 💻 Dev Tools (15 ứng dụng)
+
+IDE, runtime, version control, Docker:
+
+- **IDEs**: VSCode + Python Extension
+- **VCS**: Git, GitHub Desktop
+- **Runtime**: Node.js LTS, Python, .NET SDK
+- **Tools**: Docker Desktop, cURL, wget, PowerShell 7, Windows Terminal, WSL2
+
+### 💬 Community (5 ứng dụng)
+
+Ứng dụng giao tiếp:
+
+- Microsoft Teams, Zoom, Slack, Telegram, Zalo PC
+
+### 🎮 Gaming (10 ứng dụng)
+
+Gaming platform và tiện ích:
+
+- **Platforms**: Steam, Epic Games
+- **Tools**: Discord, OBS Studio, GeForce Experience, MSI Afterburner
+- **Monitoring**: HWiNFO, CrystalDiskInfo, CPU-Z
+- **Media**: VLC
+
+## Quản lý nâng cao
 
 ```powershell
-# Install applications from default config
-.\manage-apps.ps1 -Action Install
-
-# Install from specific config
+# Cài đặt
 .\manage-apps.ps1 -Action Install -ConfigFile "dev-tools-config.json"
 
-# Update all installed applications
+# Cập nhật tất cả
 .\manage-apps.ps1 -Action Update
 
-# Uninstall applications
+# Gỡ cài đặt
 .\manage-apps.ps1 -Action Uninstall
 
-# List installed applications status
+# Liệt kê trạng thái
 .\manage-apps.ps1 -Action List
 
-# Upgrade all Chocolatey packages
+# Nâng cấp tất cả packages
 .\manage-apps.ps1 -Action Upgrade
 ```
 
-## Available Preset Configurations
+## Tùy chỉnh Config
 
-### 🔧 basic-apps-config.json
-Common Windows applications:
-- Browsers: Chrome, Edge, Firefox, Brave
-- PDF: Foxit Reader
-- Utilities: 7-Zip, WinRAR, VLC, Revo Uninstaller, PowerToys
-- Vietnamese: UniKey
-- System: .NET 3.5, Patch My PC, Winaero Tweaker
-
-### 💬 community-config.json
-Communication tools:
-- Microsoft Teams, Zoom, Slack
-- Telegram, Zalo PC
-
-### 💻 dev-tools-config.json
-Developer essentials:
-- IDEs: VSCode
-- VCS: Git, GitHub Desktop
-- Runtime: Node.js LTS, Python, Docker Desktop
-- Tools: cURL, wget, PowerShell Core, Windows Terminal, WSL2
-- Extensions: VSCode Python
-
-### 🎮 gaming-config.json
-Gaming applications:
-- Platforms: Steam, Epic Games Launcher
-- Communication: Discord
-- Streaming: OBS Studio
-- Utilities: GeForce Experience, MSI Afterburner, HWiNFO, CrystalDiskInfo, CPU-Z
-- Media: VLC
-
-## Configuration File Format
-
-The JSON configuration file uses the following structure:
-
-```json
-{
-  "applications": [
-    {
-      "name": "package-name",        // Required: Chocolatey package name
-      "version": "1.0.0",            // Optional: Specific version (null for latest)
-      "params": ["--param", "value"] // Optional: Additional parameters
-    }
-  ]
-}
-```
-
-### Common Package Examples
+Format file JSON:
 
 ```json
 {
@@ -186,224 +92,67 @@ The JSON configuration file uses the following structure:
       "params": []
     },
     {
-      "name": "git",
-      "version": null,
-      "params": ["--params", "/GitAndUnixToolsOnPath"]
-    },
-    {
       "name": "python",
       "version": "3.11.0",
       "params": ["--params", "/InstallDir:C:\\Python311"]
-    },
-    {
-      "name": "nodejs-lts",
-      "version": null,
-      "params": []
-    },
-    {
-      "name": "docker-desktop",
-      "version": null,
-      "params": []
     }
   ]
 }
 ```
 
-## Popular Chocolatey Packages
+## Tính năng
 
-### Browsers
-- `googlechrome` - Google Chrome
-- `firefox` - Mozilla Firefox
-- `brave` - Brave Browser
-- `microsoft-edge` - Microsoft Edge
+- Tự động cài Chocolatey nếu chưa có
+- Auto-elevation (tự xin quyền Admin)
+- Cài hàng loạt từ JSON config
+- Remote execution qua web
+- Interactive preset menu
+- Environment refresh sau khi cài
+- Báo cáo chi tiết thành công/thất bại
+- Hỗ trợ version pinning và custom params
 
-### Development Tools
-- `vscode` - Visual Studio Code
-- `visualstudio2022community` - Visual Studio 2022
-- `git` - Git version control
-- `github-desktop` - GitHub Desktop
-- `postman` - Postman API platform
-- `docker-desktop` - Docker Desktop
+## Cấu trúc dự án
 
-### Programming Languages
-- `python` - Python
-- `nodejs-lts` - Node.js LTS
-- `golang` - Go
-- `openjdk` - OpenJDK Java
-- `dotnet-sdk` - .NET SDK
+```
+VSBTek-Chocolatey-Installer/
+├── install-apps.ps1              # Local installer (có menu)
+├── install-from-web.ps1          # Web installer (upload lên web)
+├── manage-apps.ps1               # Quản lý: install/update/uninstall
+├── basic-apps-config.json        # 18 ứng dụng cơ bản
+├── dev-tools-config.json         # 15 dev tools
+├── community-config.json         # 5 ứng dụng giao tiếp
+└── gaming-config.json            # 10 gaming apps
+```
 
-### Utilities
-- `7zip` - 7-Zip archiver
-- `notepadplusplus` - Notepad++
-- `vlc` - VLC Media Player
-- `adobereader` - Adobe Reader
-- `teamviewer` - TeamViewer
-- `windirstat` - WinDirStat
+## Xử lý sự cố
 
-### Communication
-- `slack` - Slack
-- `discord` - Discord
-- `zoom` - Zoom
-- `microsoft-teams` - Microsoft Teams
-
-## Troubleshooting
-
-### Script execution is disabled
-
-If you get an error about script execution policy:
+**Lỗi execution policy:**
 
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-### Not running as Administrator
-
-Right-click PowerShell and select "Run as Administrator"
-
-### Chocolatey installation fails
-
-1. Ensure you have internet connection
-2. Check if proxy settings are required
-3. Try manual installation from [chocolatey.org](https://chocolatey.org/install)
-
-### Package installation fails
-
-1. Check package name at [chocolatey.org/packages](https://community.chocolatey.org/packages)
-2. Verify version exists
-3. Check system requirements for the package
-4. Review error messages in output
-
-### Refresh environment variables
-
-After installation, you may need to refresh your environment:
+**Refresh environment sau khi cài:**
 
 ```powershell
 refreshenv
-# or restart PowerShell
+# hoặc mở lại PowerShell
 ```
 
-## Security Best Practices
+**Tìm package trên Chocolatey:**
 
-1. **Review Scripts**: Always review scripts before executing, especially from remote sources
-2. **Trusted Sources**: Only use `irm | iex` with URLs you trust
-3. **HTTPS Only**: Ensure remote scripts are served over HTTPS
-4. **Version Pinning**: Specify exact versions for critical applications
-5. **Backup**: Create system restore point before bulk installations
+- [https://community.chocolatey.org/packages](https://community.chocolatey.org/packages)
 
-## Advanced Features
+## Tài nguyên
 
-### Custom Installation Path
-
-```powershell
-@{
-    Name = 'python';
-    Version = '3.11.0';
-    Params = @('--params', '/InstallDir:C:\CustomPath\Python311')
-}
-```
-
-### Silent Installation Parameters
-
-```powershell
-@{
-    Name = 'vscode';
-    Version = $null;
-    Params = @('--params', '/NoDesktopIcon /NoQuicklaunchIcon')
-}
-```
-
-### Install from Private Repository
-
-```powershell
-choco source add -n=private-repo -s="https://your-private-repo.com/nuget"
-```
-
-## Web Installer Details
-
-The `install-from-web.ps1` script is designed for remote execution from `https://scripts.vsbtek.com/install`.
-
-### Key Features:
-- **Auto-elevation**: Automatically requests Administrator privileges
-- **Preset selection**: Interactive menu or direct parameter
-- **GitHub-based configs**: Downloads JSON configs from GitHub repository
-- **No local files needed**: Everything runs from memory
-- **Single file deployment**: Only one file to upload to your website
-- **Auto-update**: Configs are always fresh from GitHub
-
-### Available Presets:
-- `basic` - Basic Apps (browsers, utilities, etc.)
-- `dev` - Development Tools (IDEs, Git, Docker, etc.)
-- `community` - Community Apps (Teams, Zoom, Slack, etc.)
-- `gaming` - Gaming (Steam, Discord, OBS, etc.)
-
-### How It Works:
-1. Script downloaded from `scripts.vsbtek.com/install`
-2. Checks for Administrator privileges (auto-elevates if needed)
-3. Shows interactive menu or uses `-Preset` parameter
-4. Downloads JSON config from GitHub repository
-5. Displays list of applications to be installed
-6. Asks for confirmation
-7. Installs Chocolatey if not present
-8. Installs all applications from the preset
-9. Shows installation summary
-
-### Deployment:
-
-Upload only **ONE** file to your website:
-- `install-from-web.ps1` → `https://scripts.vsbtek.com/install`
-
-All configuration files are automatically loaded from:
-- GitHub: `https://github.com/HenryBui21/VSBTek-Chocolatey-Installer`
-
-See `/Docs/DEPLOY-TO-WEB.md` for detailed deployment instructions.
-
-## File Structure
-
-```
-VSBTek-Chocolatey-Installer/
-├── install-apps.ps1              # Local installer with interactive menu
-├── install-from-web.ps1          # Web installer (upload to scripts.vsbtek.com/install)
-├── manage-apps.ps1               # Advanced management script
-├── basic-apps-config.json        # Basic applications preset (15 apps)
-├── community-config.json         # Communication tools preset (5 apps)
-├── dev-tools-config.json         # Developer tools preset (15 apps)
-├── gaming-config.json            # Gaming applications preset (10 apps)
-├── Docs/                         # Documentation
-│   ├── DEPLOY-TO-WEB.md         # Deployment guide
-│   ├── CHECKLIST.md             # Deployment checklist
-│   ├── HUONG-DAN.md             # Vietnamese user guide
-│   └── DEPLOYMENT.md            # Detailed deployment instructions
-├── .vscode/                      # VSCode settings
-│   └── settings.json            # File encoding configuration
-├── .gitignore                    # Git ignore rules
-├── LICENSE                       # MIT License
-└── README.md                     # This file
-```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues or pull requests.
+- [Chocolatey Packages](https://community.chocolatey.org/packages)
+- [Chocolatey Docs](https://docs.chocolatey.org/)
+- [GitHub Repository](https://github.com/HenryBui21/VSBTek-Chocolatey-Installer)
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Resources
-
-- [Chocolatey Official Website](https://chocolatey.org/)
-- [Chocolatey Package Gallery](https://community.chocolatey.org/packages)
-- [Chocolatey Documentation](https://docs.chocolatey.org/)
-- [PowerShell Documentation](https://docs.microsoft.com/en-us/powershell/)
-
-## Changelog
-
-### Version 1.0.0
-- Initial release
-- Basic installation functionality
-- JSON configuration support
-- Advanced management features
-- Comprehensive documentation
+MIT License - xem file [LICENSE](LICENSE)
 
 ---
 
-**Made with ❤️ for Windows automation**
+**VSBTek** - Tự động hóa cài đặt Windows
