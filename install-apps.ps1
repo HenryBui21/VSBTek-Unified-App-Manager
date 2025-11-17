@@ -9,7 +9,7 @@
 #   Local with config:     .\install-apps.ps1 -ConfigFile "basic-apps-config.json"
 #   Management mode:       .\install-apps.ps1 -Action Update -Preset dev
 #   Remote (download):     irm URL -OutFile install-apps.ps1; .\install-apps.ps1
-#   Remote (direct):       iex (irm https://scripts.vsbtek.com/install-apps.ps1)
+#   Remote (one-liner):    irm URL -OutFile "$env:TEMP\install-apps.ps1"; & "$env:TEMP\install-apps.ps1"
 
 param(
     [Parameter(Mandatory=$false)]
@@ -871,8 +871,8 @@ if ($KeepWindowOpen) {
     Download and run with interactive menu
 
 .EXAMPLE
-    iex (irm https://scripts.vsbtek.com/install-apps.ps1)
-    Direct remote execution (interactive mode only)
+    irm https://scripts.vsbtek.com/install-apps.ps1 -OutFile "$env:TEMP\install-apps.ps1"; & "$env:TEMP\install-apps.ps1"
+    One-liner: download to temp and run immediately
 
 .NOTES
     Author: VSBTek

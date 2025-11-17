@@ -17,11 +17,11 @@ irm https://scripts.vsbtek.com/install-apps.ps1 -OutFile install-apps.ps1
 .\install-apps.ps1 -Preset basic -Mode remote
 ```
 
-**Cách 2: Chạy trực tiếp từ web (Chỉ interactive mode)**
+**Cách 2: One-liner (Tải và chạy ngay)**
 ```powershell
-iex (irm https://scripts.vsbtek.com/install-apps.ps1)
+irm https://scripts.vsbtek.com/install-apps.ps1 -OutFile "$env:TEMP\install-apps.ps1"; & "$env:TEMP\install-apps.ps1"
 ```
-⚠️ **Lưu ý:** Cách 2 chỉ hỗ trợ interactive mode (menu), không hỗ trợ tham số.
+⚠️ **Lưu ý:** Script tải về thư mục TEMP và tự động chạy với interactive mode.
 
 ### Từ Local
 
