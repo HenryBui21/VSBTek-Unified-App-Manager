@@ -7,10 +7,10 @@
 param(
     [Parameter(Mandatory=$false)]
     [ValidateSet('Install', 'Update', 'Uninstall', 'List', 'Upgrade')]
-    [string]$Action = 'Install',
+    [string]$Action = $null,
 
     [Parameter(Mandatory=$false)]
-    [string]$ConfigFile = "apps-config.json",
+    [string]$ConfigFile = $null,
 
     [Parameter(Mandatory=$false)]
     [switch]$Force
@@ -30,22 +30,81 @@ function Write-ColorOutput {
 
 function Write-Success {
     param([string]$Message)
-    Write-ColorOutput "✓ $Message" -Color Green
+    Write-ColorOutput "[OK] $Message" -Color Green
 }
 
 function Write-ErrorMsg {
     param([string]$Message)
-    Write-ColorOutput "✗ $Message" -Color Red
+    Write-ColorOutput "[ERROR] $Message" -Color Red
 }
 
 function Write-Info {
     param([string]$Message)
-    Write-ColorOutput "→ $Message" -Color Cyan
+    Write-ColorOutput "[INFO] $Message" -Color Cyan
 }
 
 function Write-WarningMsg {
     param([string]$Message)
-    Write-ColorOutput "⚠ $Message" -Color Yellow
+    Write-ColorOutput "[WARNING] $Message" -Color Yellow
+}
+
+# Show action selection menu
+function Show-ActionMenu {
+    Write-ColorOutput "`n========================================" -Color Cyan
+    Write-ColorOutput "  Select Action" -Color Cyan
+    Write-ColorOutput "========================================" -Color Cyan
+    Write-Host ""
+    Write-Host "  1. Install applications"
+    Write-Host "  2. Update applications"
+    Write-Host "  3. Uninstall applications"
+    Write-Host "  4. List installed applications"
+    Write-Host "  5. Upgrade all Chocolatey packages"
+    Write-Host "  6. Exit"
+    Write-Host ""
+
+    $choice = Read-Host "Enter your choice (1-6)"
+
+    switch ($choice) {
+        '1' { return 'Install' }
+        '2' { return 'Update' }
+        '3' { return 'Uninstall' }
+        '4' { return 'List' }
+        '5' { return 'Upgrade' }
+        '6' {
+            Write-Info "Exiting..."
+            exit 0
+        }
+        default {
+            Write-ErrorMsg "Invalid choice. Please try again."
+            return Show-ActionMenu
+        }
+    }
+}
+
+# Show config file selection menu
+function Show-ConfigMenu {
+    Write-ColorOutput "`n========================================" -Color Cyan
+    Write-ColorOutput "  Select Configuration" -Color Cyan
+    Write-ColorOutput "========================================" -Color Cyan
+    Write-Host ""
+    Write-Host "  1. Basic Apps (18 apps) - Browsers, utilities, tools"
+    Write-Host "  2. Dev Tools (15 apps) - IDEs, Git, Docker, etc."
+    Write-Host "  3. Community (5 apps) - Teams, Zoom, Slack, etc."
+    Write-Host "  4. Gaming (10 apps) - Steam, Discord, OBS, etc."
+    Write-Host ""
+
+    $choice = Read-Host "Enter your choice (1-4)"
+
+    switch ($choice) {
+        '1' { return 'basic-apps-config.json' }
+        '2' { return 'dev-tools-config.json' }
+        '3' { return 'community-config.json' }
+        '4' { return 'gaming-config.json' }
+        default {
+            Write-ErrorMsg "Invalid choice. Please try again."
+            return Show-ConfigMenu
+        }
+    }
 }
 
 # Check if running as Administrator
@@ -124,8 +183,70 @@ function Test-PackageInstalled {
     )
 
     try {
+        # First check via Chocolatey
         $result = & choco list --local-only --exact $PackageName 2>&1
-        return $LASTEXITCODE -eq 0 -and $result -match $PackageName
+        if ($LASTEXITCODE -eq 0 -and $result -match $PackageName) {
+            return $true
+        }
+
+        # If not found via choco, check Windows installed programs
+        # This helps detect programs installed via other methods
+        $uninstallPaths = @(
+            "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
+        )
+
+        # Map package names to common display names
+        $nameMap = @{
+            'googlechrome' = @('Google Chrome', 'Chrome')
+            'microsoft-edge' = @('Microsoft Edge', 'Edge')
+            'firefox' = @('Mozilla Firefox', 'Firefox')
+            'brave' = @('Brave', 'Brave Browser')
+            'notepadplusplus' = @('Notepad++')
+            'foxitreader' = @('Foxit Reader', 'Foxit PDF Reader')
+            'ultraviewer' = @('UltraViewer')
+            'treesizefree' = @('TreeSize Free')
+            '7zip' = @('7-Zip')
+            'winrar' = @('WinRAR')
+            'vlc' = @('VLC media player', 'VLC')
+            'powertoys' = @('PowerToys', 'Microsoft PowerToys')
+            'unikey' = @('UniKey')
+            'revo-uninstaller' = @('Revo Uninstaller')
+            'winaero-tweaker' = @('Winaero Tweaker')
+            'vscode' = @('Microsoft Visual Studio Code', 'Visual Studio Code')
+            'git' = @('Git', 'Git version')
+            'python' = @('Python')
+            'nodejs-lts' = @('Node.js')
+            'docker-desktop' = @('Docker Desktop')
+        }
+
+        $searchNames = if ($nameMap.ContainsKey($PackageName.ToLower())) {
+            $nameMap[$PackageName.ToLower()]
+        } else {
+            @($PackageName)
+        }
+
+        foreach ($path in $uninstallPaths) {
+            $installed = Get-ItemProperty $path -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $displayName = $_.DisplayName
+                    if ($displayName) {
+                        foreach ($name in $searchNames) {
+                            if ($displayName -like "*$name*") {
+                                return $true
+                            }
+                        }
+                    }
+                    $false
+                }
+
+            if ($installed) {
+                return $true
+            }
+        }
+
+        return $false
     }
     catch {
         return $false
@@ -267,7 +388,7 @@ function Show-InstalledPackages {
         $isInstalled = Test-PackageInstalled -PackageName $app.name
 
         if ($isInstalled) {
-            Write-ColorOutput "  ✓ $($app.name)" -Color Green
+            Write-ColorOutput "  [OK] $($app.name)" -Color Green
 
             # Get installed version
             try {
@@ -285,7 +406,7 @@ function Show-InstalledPackages {
                 # Ignore version check errors
             }
         } else {
-            Write-ColorOutput "  ✗ $($app.name)" -Color Red
+            Write-ColorOutput "  [X] $($app.name)" -Color Red
             Write-ColorOutput "    Not installed" -Color Gray
         }
 
@@ -314,151 +435,171 @@ function Invoke-UpgradeAll {
     }
 }
 
-# Main execution
-function Main {
-    Write-ColorOutput "`n========================================" -Color Magenta
-    Write-ColorOutput "  Chocolatey Application Manager" -Color Magenta
-    Write-ColorOutput "  Action: $Action" -Color Magenta
-    Write-ColorOutput "========================================`n" -Color Magenta
+# ============================================================================
+# Main Execution
+# ============================================================================
 
-    # Check administrator privileges
-    if (-not (Test-Administrator)) {
-        Write-ErrorMsg "This script requires Administrator privileges"
-        Write-Info "Please run PowerShell as Administrator and try again"
-        exit 1
-    }
+Write-ColorOutput "`n========================================" -Color Magenta
+Write-ColorOutput "  Chocolatey Application Manager" -Color Magenta
+Write-ColorOutput "========================================`n" -Color Magenta
 
-    Write-Success "Running with Administrator privileges"
-
-    # Install Chocolatey
-    if (-not (Install-Chocolatey)) {
-        Write-ErrorMsg "Cannot proceed without Chocolatey"
-        exit 1
-    }
-
-    # For Upgrade All action, we don't need config
-    if ($Action -eq 'Upgrade') {
-        Write-Info "Upgrading all installed Chocolatey packages..."
-        Invoke-UpgradeAll
-        return
-    }
-
-    # Resolve config file path
-    $configPath = $ConfigFile
-    if (-not [System.IO.Path]::IsPathRooted($configPath)) {
-        $configPath = Join-Path $PSScriptRoot $ConfigFile
-    }
-
-    # Load configuration
-    $applications = Get-ApplicationConfig -ConfigPath $configPath
-
-    if (-not $applications -or $applications.Count -eq 0) {
-        Write-ErrorMsg "No applications found in configuration"
-        exit 1
-    }
-
-    # Execute action
-    switch ($Action) {
-        'Install' {
-            Write-ColorOutput "`n========================================" -Color Magenta
-            Write-ColorOutput "  Installing Applications" -Color Magenta
-            Write-ColorOutput "========================================`n" -Color Magenta
-
-            $successCount = 0
-            $failCount = 0
-
-            foreach ($app in $applications) {
-                $params = if ($app.params) { $app.params } else { @() }
-                $installed = Install-ChocoPackage -PackageName $app.name -Version $app.version -Params $params -ForceInstall $Force
-
-                if ($installed) {
-                    $successCount++
-                } else {
-                    $failCount++
-                }
-
-                Write-Host ""
-            }
-
-            # Summary
-            Write-ColorOutput "========================================" -Color Magenta
-            Write-ColorOutput "  Installation Summary" -Color Magenta
-            Write-ColorOutput "========================================" -Color Magenta
-            Write-ColorOutput "Total: $($applications.Count) | Success: $successCount | Failed: $failCount" -Color White
-            Write-ColorOutput "========================================`n" -Color Magenta
-        }
-
-        'Update' {
-            Write-ColorOutput "`n========================================" -Color Magenta
-            Write-ColorOutput "  Updating Applications" -Color Magenta
-            Write-ColorOutput "========================================`n" -Color Magenta
-
-            $successCount = 0
-            $failCount = 0
-
-            foreach ($app in $applications) {
-                $updated = Update-ChocoPackage -PackageName $app.name -Version $app.version
-
-                if ($updated) {
-                    $successCount++
-                } else {
-                    $failCount++
-                }
-
-                Write-Host ""
-            }
-
-            # Summary
-            Write-ColorOutput "========================================" -Color Magenta
-            Write-ColorOutput "  Update Summary" -Color Magenta
-            Write-ColorOutput "========================================" -Color Magenta
-            Write-ColorOutput "Total: $($applications.Count) | Success: $successCount | Failed: $failCount" -Color White
-            Write-ColorOutput "========================================`n" -Color Magenta
-        }
-
-        'Uninstall' {
-            Write-ColorOutput "`n========================================" -Color Magenta
-            Write-ColorOutput "  Uninstalling Applications" -Color Magenta
-            Write-ColorOutput "========================================`n" -Color Magenta
-
-            Write-WarningMsg "You are about to uninstall $($applications.Count) applications!"
-            $confirm = Read-Host "Type 'YES' to continue"
-
-            if ($confirm -ne 'YES') {
-                Write-Info "Uninstall cancelled"
-                return
-            }
-
-            $successCount = 0
-            $failCount = 0
-
-            foreach ($app in $applications) {
-                $uninstalled = Uninstall-ChocoPackage -PackageName $app.name -ForceUninstall $Force
-
-                if ($uninstalled) {
-                    $successCount++
-                } else {
-                    $failCount++
-                }
-
-                Write-Host ""
-            }
-
-            # Summary
-            Write-ColorOutput "========================================" -Color Magenta
-            Write-ColorOutput "  Uninstall Summary" -Color Magenta
-            Write-ColorOutput "========================================" -Color Magenta
-            Write-ColorOutput "Total: $($applications.Count) | Success: $successCount | Failed: $failCount" -Color White
-            Write-ColorOutput "========================================`n" -Color Magenta
-        }
-
-        'List' {
-            Show-InstalledPackages -Applications $applications
-        }
-    }
-
-    Write-Success "Operation completed!"
+# Check administrator privileges
+if (-not (Test-Administrator)) {
+    Write-ErrorMsg "This script requires Administrator privileges"
+    Write-Info "Please run PowerShell as Administrator and try again"
+    exit 1
 }
 
-# Execute main function
-Main
+Write-Success "Running with Administrator privileges"
+
+# Install Chocolatey
+if (-not (Install-Chocolatey)) {
+    Write-ErrorMsg "Cannot proceed without Chocolatey"
+    exit 1
+}
+
+# Show interactive menu if Action not specified
+if (-not $Action) {
+    $Action = Show-ActionMenu
+}
+
+Write-ColorOutput "`nSelected Action: $Action" -Color Yellow
+
+# For Upgrade All action, we don't need config
+if ($Action -eq 'Upgrade') {
+    Write-Info "Upgrading all installed Chocolatey packages..."
+    Invoke-UpgradeAll
+    exit 0
+}
+
+# Show config menu if ConfigFile not specified
+if (-not $ConfigFile) {
+    $ConfigFile = Show-ConfigMenu
+}
+
+Write-ColorOutput "Selected Config: $ConfigFile`n" -Color Yellow
+
+# Resolve config file path
+$configPath = $ConfigFile
+if (-not [System.IO.Path]::IsPathRooted($configPath)) {
+    $configPath = Join-Path $PSScriptRoot $ConfigFile
+}
+
+# Load configuration
+$applications = Get-ApplicationConfig -ConfigPath $configPath
+
+if (-not $applications -or $applications.Count -eq 0) {
+    Write-ErrorMsg "No applications found in configuration"
+    exit 1
+}
+
+# Show confirmation before proceeding
+Write-ColorOutput "`nApplications to process: $($applications.Count)" -Color Cyan
+Write-Host ""
+$confirm = Read-Host "Do you want to proceed? (Y/N)"
+if ($confirm -ne 'Y' -and $confirm -ne 'y') {
+    Write-Info "Operation cancelled"
+    exit 0
+}
+
+# Execute action
+switch ($Action) {
+    'Install' {
+        Write-ColorOutput "`n========================================" -Color Magenta
+        Write-ColorOutput "  Installing Applications" -Color Magenta
+        Write-ColorOutput "========================================`n" -Color Magenta
+
+        $successCount = 0
+        $failCount = 0
+
+        foreach ($app in $applications) {
+            $params = if ($app.params) { $app.params } else { @() }
+            $installed = Install-ChocoPackage -PackageName $app.name -Version $app.version -Params $params -ForceInstall $Force
+
+            if ($installed) {
+                $successCount++
+            } else {
+                $failCount++
+            }
+
+            Write-Host ""
+        }
+
+        # Summary
+        Write-ColorOutput "========================================" -Color Magenta
+        Write-ColorOutput "  Installation Summary" -Color Magenta
+        Write-ColorOutput "========================================" -Color Magenta
+        Write-ColorOutput "Total: $($applications.Count) | Success: $successCount | Failed: $failCount" -Color White
+        Write-ColorOutput "========================================`n" -Color Magenta
+    }
+
+    'Update' {
+        Write-ColorOutput "`n========================================" -Color Magenta
+        Write-ColorOutput "  Updating Applications" -Color Magenta
+        Write-ColorOutput "========================================`n" -Color Magenta
+
+        $successCount = 0
+        $failCount = 0
+
+        foreach ($app in $applications) {
+            $updated = Update-ChocoPackage -PackageName $app.name -Version $app.version
+
+            if ($updated) {
+                $successCount++
+            } else {
+                $failCount++
+            }
+
+            Write-Host ""
+        }
+
+        # Summary
+        Write-ColorOutput "========================================" -Color Magenta
+        Write-ColorOutput "  Update Summary" -Color Magenta
+        Write-ColorOutput "========================================" -Color Magenta
+        Write-ColorOutput "Total: $($applications.Count) | Success: $successCount | Failed: $failCount" -Color White
+        Write-ColorOutput "========================================`n" -Color Magenta
+    }
+
+    'Uninstall' {
+        Write-ColorOutput "`n========================================" -Color Magenta
+        Write-ColorOutput "  Uninstalling Applications" -Color Magenta
+        Write-ColorOutput "========================================`n" -Color Magenta
+
+        Write-WarningMsg "You are about to uninstall $($applications.Count) applications!"
+        $confirm = Read-Host "Type 'YES' to continue"
+
+        if ($confirm -ne 'YES') {
+            Write-Info "Uninstall cancelled"
+            exit 0
+        }
+
+        $successCount = 0
+        $failCount = 0
+
+        foreach ($app in $applications) {
+            $uninstalled = Uninstall-ChocoPackage -PackageName $app.name -ForceUninstall $Force
+
+            if ($uninstalled) {
+                $successCount++
+            } else {
+                $failCount++
+            }
+
+            Write-Host ""
+        }
+
+        # Summary
+        Write-ColorOutput "========================================" -Color Magenta
+        Write-ColorOutput "  Uninstall Summary" -Color Magenta
+        Write-ColorOutput "========================================" -Color Magenta
+        Write-ColorOutput "Total: $($applications.Count) | Success: $successCount | Failed: $failCount" -Color White
+        Write-ColorOutput "========================================`n" -Color Magenta
+    }
+
+    'List' {
+        Show-InstalledPackages -Applications $applications
+    }
+}
+
+Write-Success "Operation completed!"
