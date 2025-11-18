@@ -755,6 +755,28 @@ function Invoke-UpgradeAll {
 # MENU FUNCTIONS
 # ============================================================================
 
+function Show-ContinuePrompt {
+    Write-Host ""
+    Write-ColorOutput "========================================" -Color Cyan
+    Write-Host "  1. Return to Main Menu"
+    Write-Host "  2. Exit"
+    Write-Host ""
+
+    $choice = Read-Host "Enter your choice (1-2)"
+
+    switch ($choice) {
+        '1' { return $true }
+        '2' {
+            Write-Info "Exiting..."
+            return $false
+        }
+        default {
+            Write-ErrorMsg "Invalid choice. Returning to menu..."
+            return $true
+        }
+    }
+}
+
 function Show-MainMenu {
     Write-ColorOutput "`n========================================" -Color Cyan
     Write-ColorOutput "  VSBTek Chocolatey Manager" -Color Cyan
@@ -943,6 +965,93 @@ function Invoke-UninstallMode {
 }
 
 # ============================================================================
+# MAIN WORKFLOW FUNCTION
+# ============================================================================
+
+function Invoke-MainWorkflow {
+    param(
+        [string]$InitialAction = $null,
+        [string]$InitialPreset = $null,
+        [string]$InitialConfigFile = $null,
+        [string]$ExecutionMode = 'local',
+        [bool]$ForceFlag = $false
+    )
+
+    # Determine action
+    $selectedAction = $InitialAction
+    if (-not $selectedAction) {
+        $selectedAction = Show-MainMenu
+    }
+
+    Write-ColorOutput "`nSelected Action: $selectedAction" -Color Yellow
+
+    # Handle Upgrade All (doesn't need config)
+    if ($selectedAction -eq 'Upgrade') {
+        Write-Info "Upgrading all installed Chocolatey packages..."
+        Invoke-UpgradeAll
+        return $true  # Continue to menu
+    }
+
+    # Determine preset/config using consolidated helper function
+    $applications = $null
+
+    if ($InitialPreset -or $InitialConfigFile) {
+        # Use preset or config file directly
+        $applications = Get-ConfigApplications -Preset $InitialPreset -ConfigFile $InitialConfigFile -Mode $ExecutionMode
+    } else {
+        # Show preset menu and get applications
+        $selectedPreset = Show-PresetMenu
+        $applications = Get-ConfigApplications -Preset $selectedPreset -Mode $ExecutionMode
+    }
+
+    # Validate applications loaded
+    if (-not $applications -or $applications.Count -eq 0) {
+        Write-ErrorMsg "No applications found in configuration"
+        return $true  # Continue to menu
+    }
+
+    # Display applications to process
+    Write-ColorOutput "`n========================================" -Color Magenta
+    Write-ColorOutput "  Applications to Process: $($applications.Count)" -Color Magenta
+    Write-ColorOutput "========================================" -Color Magenta
+
+    foreach ($app in $applications) {
+        $appName = if ($app.name) { $app.name } else { $app.Name }
+        $appVersion = if ($app.version) { $app.version } else { if ($app.Version) { $app.Version } else { $null } }
+        $versionText = if ($appVersion) { "v$appVersion" } else { "latest" }
+        Write-ColorOutput "  * $appName ($versionText)" -Color White
+    }
+
+    Write-ColorOutput "========================================`n" -Color Magenta
+
+    # Confirm before proceeding
+    $confirm = Read-Host "Do you want to proceed? (Y/N)"
+    if ($confirm -ne 'Y' -and $confirm -ne 'y') {
+        Write-Info "Operation cancelled"
+        return $true  # Continue to menu
+    }
+
+    # Execute selected action
+    switch ($selectedAction) {
+        'Install' {
+            Invoke-InstallMode -Applications $applications
+        }
+        'Update' {
+            Invoke-UpdateMode -Applications $applications -AllowReinstall $ForceFlag
+        }
+        'Uninstall' {
+            Invoke-UninstallMode -Applications $applications
+        }
+        'List' {
+            Show-InstalledPackages -Applications $applications
+        }
+    }
+
+    Write-Success "Operation completed!"
+    return $true  # Continue to menu
+}
+
+# ============================================================================
 # MAIN ENTRY POINT
 # ============================================================================
 
@@ -986,87 +1095,36 @@ if (-not (Install-Chocolatey)) {
     }
 }
 
-# Determine action
-if (-not $Action) {
-    $Action = Show-MainMenu
-}
+# Main execution loop
+$continueRunning = $true
 
-Write-ColorOutput "`nSelected Action: $Action" -Color Yellow
+# If command-line parameters are provided, run once and show prompt
+if ($Action -or $Preset -or $ConfigFile) {
+    # Run with provided parameters
+    Invoke-MainWorkflow -InitialAction $Action -InitialPreset $Preset -InitialConfigFile $ConfigFile -ExecutionMode $Mode -ForceFlag $Force
 
-# Handle Upgrade All (doesn't need config)
-if ($Action -eq 'Upgrade') {
-    Write-Info "Upgrading all installed Chocolatey packages..."
-    Invoke-UpgradeAll
-
+    # Show continue prompt
     if ($KeepWindowOpen) {
-        Write-Host ""
-        Read-Host "Press Enter to close this window"
-    }
-    exit 0
-}
-
-# Determine preset/config using consolidated helper function
-$applications = $null
-
-if ($Preset -or $ConfigFile) {
-    # Use preset or config file directly
-    $applications = Get-ConfigApplications -Preset $Preset -ConfigFile $ConfigFile -Mode $Mode
-} else {
-    # Show preset menu and get applications
-    $selectedPreset = Show-PresetMenu
-    $applications = Get-ConfigApplications -Preset $selectedPreset -Mode $Mode
-}
-
-# Validate applications loaded
-if (-not $applications -or $applications.Count -eq 0) {
-    Write-ErrorMsg "No applications found in configuration"
-    exit 1
-}
-
-# Display applications to process
-Write-ColorOutput "`n========================================" -Color Magenta
-Write-ColorOutput "  Applications to Process: $($applications.Count)" -Color Magenta
-Write-ColorOutput "========================================" -Color Magenta
-
-foreach ($app in $applications) {
-    $appName = if ($app.name) { $app.name } else { $app.Name }
-    $appVersion = if ($app.version) { $app.version } else { if ($app.Version) { $app.Version } else { $null } }
-    $versionText = if ($appVersion) { "v$appVersion" } else { "latest" }
-    Write-ColorOutput "  * $appName ($versionText)" -Color White
-}
-
-Write-ColorOutput "========================================`n" -Color Magenta
-
-# Confirm before proceeding
-$confirm = Read-Host "Do you want to proceed? (Y/N)"
-if ($confirm -ne 'Y' -and $confirm -ne 'y') {
-    Write-Info "Operation cancelled"
-    exit 0
-}
-
-# Execute selected action
-switch ($Action) {
-    'Install' {
-        Invoke-InstallMode -Applications $applications
-    }
-    'Update' {
-        Invoke-UpdateMode -Applications $applications -AllowReinstall $Force
-    }
-    'Uninstall' {
-        Invoke-UninstallMode -Applications $applications
-    }
-    'List' {
-        Show-InstalledPackages -Applications $applications
+        $continueRunning = Show-ContinuePrompt
+    } else {
+        $continueRunning = $false
     }
 }
 
-Write-Success "Operation completed!"
+# Interactive loop
+while ($continueRunning) {
+    # Run workflow (will show menu)
+    $result = Invoke-MainWorkflow -ExecutionMode $Mode -ForceFlag $Force
 
-# Keep window open if requested
-if ($KeepWindowOpen) {
-    Write-Host ""
-    Read-Host "Press Enter to close this window"
+    if ($result) {
+        # Show continue prompt
+        $continueRunning = Show-ContinuePrompt
+    } else {
+        $continueRunning = $false
+    }
 }
+
+Write-Info "Thank you for using VSBTek Chocolatey Manager!"
 
 <#
 .SYNOPSIS
