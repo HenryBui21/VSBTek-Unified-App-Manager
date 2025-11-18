@@ -14,7 +14,9 @@
       "Bash(Select-String -Pattern \"^[a-zA-Z]\")",
       "Bash(Select-Object -First 20)",
       "Bash(del \"c:\\Users\\VSBTek\\Documents\\VSCode\\VSBTek-Chocolatey-Installer\\test-detection.ps1\")",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(Select-String -Pattern \"unexpected|error\" -Context 2)",
+      "Bash(Select-Object -First 10)"
     ],
     "deny": [],
     "ask": []
