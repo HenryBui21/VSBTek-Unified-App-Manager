@@ -4,10 +4,12 @@
       "Bash(powershell:*)",
       "Bash(dir:*)",
       "Bash(powershell.exe -File install-apps.ps1)",
-      "Bash(powershell.exe -File install-from-config.ps1)",
       "Bash(powershell.exe:*)",
       "Bash(if not exist .vscode mkdir .vscode)",
-      "Bash(del \"c:\\Users\\VSBTek\\Documents\\VSCode\\VSBTek-Chocolatey-Installer\\remove-bom.ps1\")"
+      "Bash(del \"c:\\Users\\VSBTek\\Documents\\VSCode\\VSBTek-Chocolatey-Installer\\remove-bom.ps1\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)"
     ],
     "deny": [],
     "ask": []
