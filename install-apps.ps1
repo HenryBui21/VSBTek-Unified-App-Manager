@@ -368,8 +368,21 @@ function Update-ChocoPackage {
     Write-Info "Updating $PackageName..."
 
     try {
-        if (-not (Test-PackageInstalled -PackageName $PackageName)) {
-            Write-WarningMsg "$PackageName is not installed, skipping update"
+        # For update, ONLY check Chocolatey packages (not Windows Registry)
+        # Because we can only update packages installed via Chocolatey
+        $result = & choco list --local-only --exact $PackageName 2>&1
+        $isChocoInstalled = $LASTEXITCODE -eq 0 -and $result -match $PackageName
+
+        if (-not $isChocoInstalled) {
+            # Check if installed via other methods
+            $installedViaOtherMethods = Test-PackageInstalled -PackageName $PackageName
+
+            if ($installedViaOtherMethods) {
+                Write-WarningMsg "$PackageName is installed but NOT via Chocolatey, cannot update"
+                Write-Host "  Suggestion: Uninstall manually and reinstall via Chocolatey" -ForegroundColor Gray
+            } else {
+                Write-WarningMsg "$PackageName is not installed, skipping update"
+            }
             return $false
         }
 
@@ -692,8 +705,29 @@ Write-Success "Running with Administrator privileges"
 
 # Install Chocolatey
 if (-not (Install-Chocolatey)) {
-    Write-ErrorMsg "Cannot proceed without Chocolatey"
-    exit 1
+    Write-ErrorMsg "Chocolatey installation failed"
+    Write-Host ""
+    Write-ColorOutput "Possible solutions:" -Color Yellow
+    Write-Host "  1. Check your internet connection"
+    Write-Host "  2. Disable firewall/antivirus temporarily"
+    Write-Host "  3. Run as Administrator"
+    Write-Host "  4. Install manually from https://chocolatey.org/install"
+    Write-Host ""
+
+    $retry = Read-Host "Do you want to retry? (Y/N)"
+    if ($retry -eq 'Y' -or $retry -eq 'y') {
+        if (Install-Chocolatey) {
+            Write-Success "Chocolatey installed successfully on retry"
+        } else {
+            Write-ErrorMsg "Cannot proceed without Chocolatey. Exiting..."
+            Read-Host "Press Enter to exit"
+            exit 1
+        }
+    } else {
+        Write-Info "Script cancelled by user"
+        Read-Host "Press Enter to exit"
+        exit 0
+    }
 }
 
 # Determine action
