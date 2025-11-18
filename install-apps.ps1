@@ -280,91 +280,125 @@ function Test-PackageInstalled {
             "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
         )
 
-        # Map package names to common display names
-        $nameMap = @{
-            # Browsers
-            'googlechrome' = @('Google Chrome', 'Chrome')
-            'microsoft-edge' = @('Microsoft Edge', 'Edge')
-            'firefox' = @('Mozilla Firefox', 'Firefox')
-            'brave' = @('Brave', 'Brave Browser')
+        # Generate search names dynamically from package name
+        function Get-SearchNames {
+            param([string]$PackageName)
 
-            # Editors & Tools
-            'notepadplusplus' = @('Notepad++')
-            'notepadplusplus.install' = @('Notepad++')
-            'foxitreader' = @('Foxit Reader', 'Foxit PDF Reader')
+            $names = @()
+            $lower = $PackageName.ToLower()
 
-            # Remote & System Tools
-            'ultraviewer' = @('UltraViewer')
-            'treesizefree' = @('TreeSize Free')
-            'patch-my-pc' = @('PatchMyPC', 'Patch My PC')
+            # Static mappings for known special cases
+            $staticMap = @{
+                'googlechrome' = @('Google Chrome')
+                'microsoft-edge' = @('Microsoft Edge')
+                'notepadplusplus' = @('Notepad++')
+                'notepadplusplus.install' = @('Notepad++')
+                'foxitreader' = @('Foxit Reader', 'Foxit PDF Reader')
+                '7zip' = @('7-Zip')
+                '7zip.install' = @('7-Zip')
+                'powertoys' = @('PowerToys', 'Microsoft PowerToys')
+                'treesizefree' = @('TreeSize Free')
+                'patch-my-pc' = @('PatchMyPC', 'Patch My PC')
+                'winaero-tweaker' = @('Winaero Tweaker')
+                'revo-uninstaller' = @('Revo Uninstaller')
+                'obs-studio' = @('OBS Studio')
+                'geforce-experience' = @('NVIDIA GeForce Experience')
+                'msiafterburner' = @('MSI Afterburner')
+                'crystaldiskinfo' = @('CrystalDiskInfo')
+                'cpu-z' = @('CPU-Z')
+                'epicgameslauncher' = @('Epic Games Launcher')
+                'github-desktop' = @('GitHub Desktop')
+                'microsoft-windows-terminal' = @('Windows Terminal', 'Microsoft Windows Terminal')
+                'wsl2' = @('Windows Subsystem for Linux')
+            }
 
-            # Compression
-            '7zip' = @('7-Zip')
-            '7zip.install' = @('7-Zip')
-            'winrar' = @('WinRAR')
+            # Check static map first
+            if ($staticMap.ContainsKey($lower)) {
+                return $staticMap[$lower]
+            }
 
-            # Media
-            'vlc' = @('VLC media player', 'VLC')
+            # Dynamic generation for common patterns
+            $baseName = $PackageName -replace '\.install$', '' -replace '\.portable$', ''
 
-            # Windows Utilities
-            'powertoys' = @('PowerToys', 'Microsoft PowerToys')
-            'unikey' = @('UniKey')
-            'revo-uninstaller' = @('Revo Uninstaller')
-            'winaero-tweaker' = @('Winaero Tweaker')
+            # Pattern 1: dotnet packages
+            if ($baseName -match '^dotnet') {
+                $names += "Microsoft .NET*"
+                $names += ".NET*"
+                if ($baseName -match '(\d+\.\d+)') {
+                    $version = $matches[1]
+                    $names += "*$version*"
+                }
+            }
+            # Pattern 2: microsoft- prefix
+            elseif ($baseName -match '^microsoft-(.+)') {
+                $appName = $matches[1] -replace '-', ' '
+                $names += "Microsoft $appName"
+                $names += "$appName"
+            }
+            # Pattern 3: -lts, -core suffixes (nodejs-lts, powershell-core)
+            elseif ($baseName -match '^(.+?)-(lts|core)$') {
+                $appName = $matches[1]
+                $names += Get-FriendlyName $appName
+            }
+            # Pattern 4: Simple names (git, vscode, python, etc.)
+            else {
+                $names += Get-FriendlyName $baseName
+            }
 
-            # .NET Frameworks
-            'dotnet3.5' = @('Microsoft .NET Framework 3.5', '.NET Framework 3.5')
-            'dotnet-8.0-desktopruntime' = @('Microsoft Windows Desktop Runtime - 8.', 'Microsoft .NET Desktop Runtime - 8.')
-            'dotnet-desktopruntime' = @('Microsoft Windows Desktop Runtime', 'Microsoft .NET Desktop Runtime')
+            # Always add original package name as fallback
+            if ($names.Count -eq 0) {
+                $names += $PackageName
+            }
 
-            # Development Tools
-            'vscode' = @('Microsoft Visual Studio Code', 'Visual Studio Code')
-            'git' = @('Git', 'Git version')
-            'git.install' = @('Git', 'Git version')
-            'github-desktop' = @('GitHub Desktop')
-            'curl' = @('curl')
-            'wget' = @('Wget', 'GNU Wget')
-            'powershell-core' = @('PowerShell 7', 'PowerShell Core')
-            'pswindowsupdate' = @('PSWindowsUpdate')
-            'wsl2' = @('Windows Subsystem for Linux')
-            'microsoft-windows-terminal' = @('Windows Terminal', 'Microsoft Windows Terminal')
-            'vscode-python' = @('Python extension for Visual Studio Code')
-
-            # Programming Languages & Runtimes
-            'python' = @('Python 3.', 'Python')
-            'python3' = @('Python 3.', 'Python')
-            'nodejs-lts' = @('Node.js')
-            'nodejs' = @('Node.js')
-
-            # Containers & Virtualization
-            'docker-desktop' = @('Docker Desktop')
-
-            # Communication Tools
-            'microsoft-teams' = @('Microsoft Teams', 'Teams')
-            'zoom' = @('Zoom')
-            'slack' = @('Slack')
-            'zalopc' = @('Zalo')
-            'telegram' = @('Telegram Desktop', 'Telegram')
-            'discord' = @('Discord')
-
-            # Gaming
-            'steam' = @('Steam')
-            'epicgameslauncher' = @('Epic Games Launcher')
-            'obs-studio' = @('OBS Studio')
-            'geforce-experience' = @('NVIDIA GeForce Experience')
-            'msiafterburner' = @('MSI Afterburner')
-
-            # Hardware Monitoring
-            'hwinfo' = @('HWiNFO', 'HWiNFO64')
-            'crystaldiskinfo' = @('CrystalDiskInfo')
-            'cpu-z' = @('CPU-Z')
+            return $names
         }
 
-        $searchNames = if ($nameMap.ContainsKey($PackageName.ToLower())) {
-            $nameMap[$PackageName.ToLower()]
-        } else {
-            @($PackageName)
+        # Convert package name to friendly display name
+        function Get-FriendlyName {
+            param([string]$Name)
+
+            $friendlyMap = @{
+                'vscode' = 'Visual Studio Code'
+                'git' = 'Git'
+                'python' = 'Python'
+                'nodejs' = 'Node.js'
+                'docker' = 'Docker'
+                'vlc' = 'VLC media player'
+                'firefox' = 'Mozilla Firefox'
+                'brave' = 'Brave'
+                'chrome' = 'Google Chrome'
+                'winrar' = 'WinRAR'
+                'unikey' = 'UniKey'
+                'ultraviewer' = 'UltraViewer'
+                'zoom' = 'Zoom'
+                'slack' = 'Slack'
+                'discord' = 'Discord'
+                'steam' = 'Steam'
+                'telegram' = 'Telegram'
+                'zalopc' = 'Zalo'
+                'curl' = 'curl'
+                'wget' = 'Wget'
+                'hwinfo' = 'HWiNFO'
+            }
+
+            $lower = $Name.ToLower()
+            if ($friendlyMap.ContainsKey($lower)) {
+                return $friendlyMap[$lower]
+            }
+
+            # Capitalize first letter of each word
+            $words = $Name -split '-'
+            $capitalized = $words | ForEach-Object {
+                if ($_.Length -gt 0) {
+                    $_.Substring(0,1).ToUpper() + $_.Substring(1).ToLower()
+                } else {
+                    $_
+                }
+            }
+            return $capitalized -join ' '
         }
+
+        $searchNames = Get-SearchNames -PackageName $PackageName
 
         foreach ($path in $uninstallPaths) {
             $installed = Get-ItemProperty $path -ErrorAction SilentlyContinue |
@@ -372,28 +406,54 @@ function Test-PackageInstalled {
                     $displayName = $_.DisplayName
                     if ($displayName) {
                         foreach ($name in $searchNames) {
+                            $matched = $false
+
                             # Improved matching logic to avoid false positives
-                            # Match if:
-                            # 1. Exact match (case-insensitive)
-                            # 2. Starts with the name
-                            # 3. Contains name with word boundaries (space before/after)
-                            # 4. For wildcard patterns (containing *), use -like
                             if ($name -match '\*') {
                                 # Pattern contains wildcard, use -like
-                                if ($displayName -like $name) {
-                                    return $true
-                                }
+                                $matched = $displayName -like $name
                             } elseif ($displayName -eq $name) {
                                 # Exact match
-                                return $true
+                                $matched = $true
                             } elseif ($displayName -like "$name *") {
                                 # Starts with name followed by space
-                                return $true
+                                $matched = $true
                             } elseif ($displayName -like "* $name") {
                                 # Ends with name preceded by space
-                                return $true
+                                $matched = $true
                             } elseif ($displayName -like "* $name *") {
                                 # Contains name with spaces on both sides
+                                $matched = $true
+                            }
+
+                            if ($matched) {
+                                # Additional verification: Check if install location exists
+                                # This helps avoid ghost registry entries
+                                $installLocation = $_.InstallLocation
+                                $uninstallString = $_.UninstallString
+
+                                # If we have install location, verify it exists
+                                if ($installLocation -and $installLocation -ne '') {
+                                    if (Test-Path $installLocation) {
+                                        return $true
+                                    }
+                                    # Location doesn't exist - likely a ghost entry
+                                    continue
+                                }
+
+                                # If we have uninstall string, check if the executable exists
+                                if ($uninstallString -and $uninstallString -ne '') {
+                                    # Extract path from uninstall string (remove quotes and arguments)
+                                    $exePath = $uninstallString -replace '"', '' -replace ' /.*$', '' -replace ' -.*$', ''
+                                    if (Test-Path $exePath) {
+                                        return $true
+                                    }
+                                    # Uninstaller doesn't exist - likely a ghost entry
+                                    continue
+                                }
+
+                                # No location info available - trust the registry entry
+                                # (Some apps don't populate these fields)
                                 return $true
                             }
                         }
