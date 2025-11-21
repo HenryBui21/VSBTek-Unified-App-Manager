@@ -46,6 +46,19 @@ $ScriptUrl = "https://scripts.vsbtek.com/install-apps.ps1"
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
+# Global cache for Chocolatey packages (improves performance)
+$script:ChocoPackagesCache = $null
+$script:CacheTimestamp = $null
+$script:CacheExpiryMinutes = 5
+
+# Global preset configuration map
+$script:PresetConfigMap = @{
+    "basic" = "basic-apps-config.json"
+    "dev" = "dev-tools-config.json"
+    "community" = "community-config.json"
+    "gaming" = "gaming-config.json"
+}
+
 # ============================================================================
 # AUTO-ELEVATION
 # ============================================================================
@@ -235,9 +248,193 @@ function Get-WebConfig {
     }
 }
 
+# Consolidated helper function to get applications from preset or config file
+function Get-ConfigApplications {
+    param(
+        [string]$Preset = $null,
+        [string]$ConfigFile = $null,
+        [string]$Mode = 'local'
+    )
+
+    $applications = $null
+
+    if ($Preset) {
+        # Use preset configuration
+        $configFileName = $script:PresetConfigMap[$Preset]
+
+        if ($Mode -eq 'remote') {
+            # Download from GitHub
+            $configUrl = "$GitHubRepo/$configFileName"
+            $applications = Get-WebConfig -ConfigUrl $configUrl
+        } else {
+            # Load from local file
+            $configPath = Join-Path $PSScriptRoot $configFileName
+
+            # If local file doesn't exist, fallback to remote
+            if (-not (Test-Path $configPath)) {
+                Write-WarningMsg "Local config not found, downloading from GitHub..."
+                $configUrl = "$GitHubRepo/$configFileName"
+                $applications = Get-WebConfig -ConfigUrl $configUrl
+            } else {
+                $applications = Get-ApplicationConfig -ConfigPath $configPath
+            }
+        }
+    } elseif ($ConfigFile) {
+        # Use custom config file
+        $configPath = $ConfigFile
+        if (-not [System.IO.Path]::IsPathRooted($configPath)) {
+            $configPath = Join-Path $PSScriptRoot $ConfigFile
+        }
+        $applications = Get-ApplicationConfig -ConfigPath $configPath
+    }
+
+    return $applications
+}
+
 # ============================================================================
 # HELPER FUNCTIONS - PACKAGE DETECTION
 # ============================================================================
+
+# Cache function for Chocolatey packages list
+function Get-ChocoPackagesCache {
+    param([bool]$ForceRefresh = $false)
+
+    if ($ForceRefresh -or -not $script:ChocoPackagesCache -or
+        ((Get-Date) - $script:CacheTimestamp).TotalMinutes -gt $script:CacheExpiryMinutes) {
+
+        $result = & choco list --limit-output 2>&1
+        $script:ChocoPackagesCache = @{}
+
+        if ($LASTEXITCODE -eq 0 -and $result) {
+            foreach ($line in $result) {
+                if ($line -match "^([^|]+)\|(.+)$") {
+                    $script:ChocoPackagesCache[$matches[1]] = $matches[2]
+                }
+            }
+        }
+        $script:CacheTimestamp = Get-Date
+    }
+
+    return $script:ChocoPackagesCache
+}
+
+# Convert package name to friendly display name
+function Get-FriendlyName {
+    param([string]$Name)
+
+    $friendlyMap = @{
+        'vscode' = 'Visual Studio Code'
+        'git' = 'Git'
+        'python' = 'Python'
+        'nodejs' = 'Node.js'
+        'docker' = 'Docker'
+        'vlc' = 'VLC media player'
+        'firefox' = 'Mozilla Firefox'
+        'brave' = 'Brave'
+        'chrome' = 'Google Chrome'
+        'winrar' = 'WinRAR'
+        'unikey' = 'UniKey'
+        'ultraviewer' = 'UltraViewer'
+        'zoom' = 'Zoom'
+        'slack' = 'Slack'
+        'discord' = 'Discord'
+        'steam' = 'Steam'
+        'telegram' = 'Telegram'
+        'zalopc' = 'Zalo'
+        'curl' = 'curl'
+        'wget' = 'Wget'
+        'hwinfo' = 'HWiNFO'
+    }
+
+    $lower = $Name.ToLower()
+    if ($friendlyMap.ContainsKey($lower)) {
+        return $friendlyMap[$lower]
+    }
+
+    # Capitalize first letter of each word
+    $words = $Name -split '-'
+    $capitalized = $words | ForEach-Object {
+        if ($_.Length -gt 0) {
+            $_.Substring(0,1).ToUpper() + $_.Substring(1).ToLower()
+        } else {
+            $_
+        }
+    }
+    return $capitalized -join ' '
+}
+
+# Generate search names dynamically from package name
+function Get-SearchNames {
+    param([string]$PackageName)
+
+    $names = @()
+    $lower = $PackageName.ToLower()
+
+    # Static mappings for known special cases
+    $staticMap = @{
+        'googlechrome' = @('Google Chrome')
+        'microsoft-edge' = @('Microsoft Edge')
+        'notepadplusplus' = @('Notepad++')
+        'notepadplusplus.install' = @('Notepad++')
+        'foxitreader' = @('Foxit Reader', 'Foxit PDF Reader')
+        '7zip' = @('7-Zip')
+        '7zip.install' = @('7-Zip')
+        'powertoys' = @('PowerToys', 'Microsoft PowerToys')
+        'treesizefree' = @('TreeSize Free')
+        'patch-my-pc' = @('PatchMyPC', 'Patch My PC')
+        'winaero-tweaker' = @('Winaero Tweaker')
+        'revo-uninstaller' = @('Revo Uninstaller')
+        'obs-studio' = @('OBS Studio')
+        'geforce-experience' = @('NVIDIA GeForce Experience')
+        'msiafterburner' = @('MSI Afterburner')
+        'crystaldiskinfo' = @('CrystalDiskInfo')
+        'cpu-z' = @('CPU-Z')
+        'epicgameslauncher' = @('Epic Games Launcher')
+        'github-desktop' = @('GitHub Desktop')
+        'microsoft-windows-terminal' = @('Windows Terminal', 'Microsoft Windows Terminal')
+        'wsl2' = @('Windows Subsystem for Linux')
+    }
+
+    # Check static map first
+    if ($staticMap.ContainsKey($lower)) {
+        return $staticMap[$lower]
+    }
+
+    # Dynamic generation for common patterns
+    $baseName = $PackageName -replace '\.install$', '' -replace '\.portable$', ''
+
+    # Pattern 1: dotnet packages
+    if ($baseName -match '^dotnet') {
+        $names += "Microsoft .NET*"
+        $names += ".NET*"
+        if ($baseName -match '(\d+\.\d+)') {
+            $version = $matches[1]
+            $names += "*$version*"
+        }
+    }
+    # Pattern 2: microsoft- prefix
+    elseif ($baseName -match '^microsoft-(.+)') {
+        $appName = $matches[1] -replace '-', ' '
+        $names += "Microsoft $appName"
+        $names += "$appName"
+    }
+    # Pattern 3: -lts, -core suffixes (nodejs-lts, powershell-core)
+    elseif ($baseName -match '^(.+?)-(lts|core)$') {
+        $appName = $matches[1]
+        $names += Get-FriendlyName $appName
+    }
+    # Pattern 4: Simple names (git, vscode, python, etc.)
+    else {
+        $names += Get-FriendlyName $baseName
+    }
+
+    # Always add original package name as fallback
+    if ($names.Count -eq 0) {
+        $names += $PackageName
+    }
+
+    return $names
+}
 
 function Test-PackageInstalled {
     param(
@@ -246,25 +443,10 @@ function Test-PackageInstalled {
     )
 
     try {
-        # Check via Chocolatey first
-        # Note: In Chocolatey v2+, use --limit-output which returns format: packagename|version
-        $result = & choco list --limit-output 2>&1
+        # Check via Chocolatey first using cache
+        $chocoPackages = Get-ChocoPackagesCache
 
-        # Parse the output to find exact package match
-        $chocoInstalled = $false
-        if ($LASTEXITCODE -eq 0 -and $result) {
-            foreach ($line in $result) {
-                if ($line -match "^([^|]+)\|(.+)$") {
-                    $installedPackage = $matches[1]
-                    if ($installedPackage -eq $PackageName) {
-                        $chocoInstalled = $true
-                        break
-                    }
-                }
-            }
-        }
-
-        if ($chocoInstalled) {
+        if ($chocoPackages.ContainsKey($PackageName)) {
             return $true
         }
 
@@ -280,124 +462,7 @@ function Test-PackageInstalled {
             "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
         )
 
-        # Generate search names dynamically from package name
-        function Get-SearchNames {
-            param([string]$PackageName)
-
-            $names = @()
-            $lower = $PackageName.ToLower()
-
-            # Static mappings for known special cases
-            $staticMap = @{
-                'googlechrome' = @('Google Chrome')
-                'microsoft-edge' = @('Microsoft Edge')
-                'notepadplusplus' = @('Notepad++')
-                'notepadplusplus.install' = @('Notepad++')
-                'foxitreader' = @('Foxit Reader', 'Foxit PDF Reader')
-                '7zip' = @('7-Zip')
-                '7zip.install' = @('7-Zip')
-                'powertoys' = @('PowerToys', 'Microsoft PowerToys')
-                'treesizefree' = @('TreeSize Free')
-                'patch-my-pc' = @('PatchMyPC', 'Patch My PC')
-                'winaero-tweaker' = @('Winaero Tweaker')
-                'revo-uninstaller' = @('Revo Uninstaller')
-                'obs-studio' = @('OBS Studio')
-                'geforce-experience' = @('NVIDIA GeForce Experience')
-                'msiafterburner' = @('MSI Afterburner')
-                'crystaldiskinfo' = @('CrystalDiskInfo')
-                'cpu-z' = @('CPU-Z')
-                'epicgameslauncher' = @('Epic Games Launcher')
-                'github-desktop' = @('GitHub Desktop')
-                'microsoft-windows-terminal' = @('Windows Terminal', 'Microsoft Windows Terminal')
-                'wsl2' = @('Windows Subsystem for Linux')
-            }
-
-            # Check static map first
-            if ($staticMap.ContainsKey($lower)) {
-                return $staticMap[$lower]
-            }
-
-            # Dynamic generation for common patterns
-            $baseName = $PackageName -replace '\.install$', '' -replace '\.portable$', ''
-
-            # Pattern 1: dotnet packages
-            if ($baseName -match '^dotnet') {
-                $names += "Microsoft .NET*"
-                $names += ".NET*"
-                if ($baseName -match '(\d+\.\d+)') {
-                    $version = $matches[1]
-                    $names += "*$version*"
-                }
-            }
-            # Pattern 2: microsoft- prefix
-            elseif ($baseName -match '^microsoft-(.+)') {
-                $appName = $matches[1] -replace '-', ' '
-                $names += "Microsoft $appName"
-                $names += "$appName"
-            }
-            # Pattern 3: -lts, -core suffixes (nodejs-lts, powershell-core)
-            elseif ($baseName -match '^(.+?)-(lts|core)$') {
-                $appName = $matches[1]
-                $names += Get-FriendlyName $appName
-            }
-            # Pattern 4: Simple names (git, vscode, python, etc.)
-            else {
-                $names += Get-FriendlyName $baseName
-            }
-
-            # Always add original package name as fallback
-            if ($names.Count -eq 0) {
-                $names += $PackageName
-            }
-
-            return $names
-        }
-
-        # Convert package name to friendly display name
-        function Get-FriendlyName {
-            param([string]$Name)
-
-            $friendlyMap = @{
-                'vscode' = 'Visual Studio Code'
-                'git' = 'Git'
-                'python' = 'Python'
-                'nodejs' = 'Node.js'
-                'docker' = 'Docker'
-                'vlc' = 'VLC media player'
-                'firefox' = 'Mozilla Firefox'
-                'brave' = 'Brave'
-                'chrome' = 'Google Chrome'
-                'winrar' = 'WinRAR'
-                'unikey' = 'UniKey'
-                'ultraviewer' = 'UltraViewer'
-                'zoom' = 'Zoom'
-                'slack' = 'Slack'
-                'discord' = 'Discord'
-                'steam' = 'Steam'
-                'telegram' = 'Telegram'
-                'zalopc' = 'Zalo'
-                'curl' = 'curl'
-                'wget' = 'Wget'
-                'hwinfo' = 'HWiNFO'
-            }
-
-            $lower = $Name.ToLower()
-            if ($friendlyMap.ContainsKey($lower)) {
-                return $friendlyMap[$lower]
-            }
-
-            # Capitalize first letter of each word
-            $words = $Name -split '-'
-            $capitalized = $words | ForEach-Object {
-                if ($_.Length -gt 0) {
-                    $_.Substring(0,1).ToUpper() + $_.Substring(1).ToLower()
-                } else {
-                    $_
-                }
-            }
-            return $capitalized -join ' '
-        }
-
+        # REMOVED nested functions - now using module-level Get-SearchNames
         $searchNames = Get-SearchNames -PackageName $PackageName
 
         foreach ($path in $uninstallPaths) {
@@ -629,16 +694,8 @@ function Show-InstalledPackages {
     Write-ColorOutput "  Installed Applications Status" -Color Magenta
     Write-ColorOutput "========================================`n" -Color Magenta
 
-    # Get all Chocolatey packages once to improve performance
-    $chocoList = & choco list --limit-output 2>&1
-    $chocoPackages = @{}
-    if ($LASTEXITCODE -eq 0 -and $chocoList) {
-        foreach ($line in $chocoList) {
-            if ($line -match "^([^|]+)\|(.+)$") {
-                $chocoPackages[$matches[1]] = $matches[2]
-            }
-        }
-    }
+    # Get all Chocolatey packages using cache for better performance
+    $chocoPackages = Get-ChocoPackagesCache
 
     foreach ($app in $Applications) {
         $appName = if ($app.name) { $app.name } else { $app.Name }
@@ -697,6 +754,28 @@ function Invoke-UpgradeAll {
 # ============================================================================
 # MENU FUNCTIONS
 # ============================================================================
+
+function Show-ContinuePrompt {
+    Write-Host ""
+    Write-ColorOutput "========================================" -Color Cyan
+    Write-Host "  1. Return to Main Menu"
+    Write-Host "  2. Exit"
+    Write-Host ""
+
+    $choice = Read-Host "Enter your choice (1-2)"
+
+    switch ($choice) {
+        '1' { return $true }
+        '2' {
+            Write-Info "Exiting..."
+            return $false
+        }
+        default {
+            Write-ErrorMsg "Invalid choice. Returning to menu..."
+            return $true
+        }
+    }
+}
 
 function Show-MainMenu {
     Write-ColorOutput "`n========================================" -Color Cyan
@@ -886,6 +965,93 @@ function Invoke-UninstallMode {
 }
 
 # ============================================================================
+# MAIN WORKFLOW FUNCTION
+# ============================================================================
+
+function Invoke-MainWorkflow {
+    param(
+        [string]$InitialAction = $null,
+        [string]$InitialPreset = $null,
+        [string]$InitialConfigFile = $null,
+        [string]$ExecutionMode = 'local',
+        [bool]$ForceFlag = $false
+    )
+
+    # Determine action
+    $selectedAction = $InitialAction
+    if (-not $selectedAction) {
+        $selectedAction = Show-MainMenu
+    }
+
+    Write-ColorOutput "`nSelected Action: $selectedAction" -Color Yellow
+
+    # Handle Upgrade All (doesn't need config)
+    if ($selectedAction -eq 'Upgrade') {
+        Write-Info "Upgrading all installed Chocolatey packages..."
+        Invoke-UpgradeAll
+        return $true  # Continue to menu
+    }
+
+    # Determine preset/config using consolidated helper function
+    $applications = $null
+
+    if ($InitialPreset -or $InitialConfigFile) {
+        # Use preset or config file directly
+        $applications = Get-ConfigApplications -Preset $InitialPreset -ConfigFile $InitialConfigFile -Mode $ExecutionMode
+    } else {
+        # Show preset menu and get applications
+        $selectedPreset = Show-PresetMenu
+        $applications = Get-ConfigApplications -Preset $selectedPreset -Mode $ExecutionMode
+    }
+
+    # Validate applications loaded
+    if (-not $applications -or $applications.Count -eq 0) {
+        Write-ErrorMsg "No applications found in configuration"
+        return $true  # Continue to menu
+    }
+
+    # Display applications to process
+    Write-ColorOutput "`n========================================" -Color Magenta
+    Write-ColorOutput "  Applications to Process: $($applications.Count)" -Color Magenta
+    Write-ColorOutput "========================================" -Color Magenta
+
+    foreach ($app in $applications) {
+        $appName = if ($app.name) { $app.name } else { $app.Name }
+        $appVersion = if ($app.version) { $app.version } else { if ($app.Version) { $app.Version } else { $null } }
+        $versionText = if ($appVersion) { "v$appVersion" } else { "latest" }
+        Write-ColorOutput "  * $appName ($versionText)" -Color White
+    }
+
+    Write-ColorOutput "========================================`n" -Color Magenta
+
+    # Confirm before proceeding
+    $confirm = Read-Host "Do you want to proceed? (Y/N)"
+    if ($confirm -ne 'Y' -and $confirm -ne 'y') {
+        Write-Info "Operation cancelled"
+        return $true  # Continue to menu
+    }
+
+    # Execute selected action
+    switch ($selectedAction) {
+        'Install' {
+            Invoke-InstallMode -Applications $applications
+        }
+        'Update' {
+            Invoke-UpdateMode -Applications $applications -AllowReinstall $ForceFlag
+        }
+        'Uninstall' {
+            Invoke-UninstallMode -Applications $applications
+        }
+        'List' {
+            Show-InstalledPackages -Applications $applications
+        }
+    }
+
+    Write-Success "Operation completed!"
+    return $true  # Continue to menu
+}
+
+# ============================================================================
 # MAIN ENTRY POINT
 # ============================================================================
 
@@ -929,143 +1095,36 @@ if (-not (Install-Chocolatey)) {
     }
 }
 
-# Determine action
-if (-not $Action) {
-    $Action = Show-MainMenu
-}
+# Main execution loop
+$continueRunning = $true
 
-Write-ColorOutput "`nSelected Action: $Action" -Color Yellow
+# If command-line parameters are provided, run once and show prompt
+if ($Action -or $Preset -or $ConfigFile) {
+    # Run with provided parameters
+    Invoke-MainWorkflow -InitialAction $Action -InitialPreset $Preset -InitialConfigFile $ConfigFile -ExecutionMode $Mode -ForceFlag $Force
 
-# Handle Upgrade All (doesn't need config)
-if ($Action -eq 'Upgrade') {
-    Write-Info "Upgrading all installed Chocolatey packages..."
-    Invoke-UpgradeAll
-
+    # Show continue prompt
     if ($KeepWindowOpen) {
-        Write-Host ""
-        Read-Host "Press Enter to close this window"
-    }
-    exit 0
-}
-
-# Determine preset/config
-$applications = $null
-
-if ($Preset) {
-    # Preset specified - use it
-    $configMap = @{
-        "basic" = "basic-apps-config.json"
-        "dev" = "dev-tools-config.json"
-        "community" = "community-config.json"
-        "gaming" = "gaming-config.json"
-    }
-
-    $configFile = $configMap[$Preset]
-
-    if ($Mode -eq 'remote') {
-        # Download from GitHub
-        $configUrl = "$GitHubRepo/$configFile"
-        $applications = Get-WebConfig -ConfigUrl $configUrl
+        $continueRunning = Show-ContinuePrompt
     } else {
-        # Load from local file
-        $configPath = Join-Path $PSScriptRoot $configFile
-
-        # If local file doesn't exist, fallback to remote
-        if (-not (Test-Path $configPath)) {
-            Write-WarningMsg "Local config not found, downloading from GitHub..."
-            $configUrl = "$GitHubRepo/$configFile"
-            $applications = Get-WebConfig -ConfigUrl $configUrl
-        } else {
-            $applications = Get-ApplicationConfig -ConfigPath $configPath
-        }
+        $continueRunning = $false
     }
-} elseif ($ConfigFile) {
-    # Config file specified
-    $configPath = $ConfigFile
-    if (-not [System.IO.Path]::IsPathRooted($configPath)) {
-        $configPath = Join-Path $PSScriptRoot $ConfigFile
-    }
-    $applications = Get-ApplicationConfig -ConfigPath $configPath
-} else {
-    # Show preset menu
-    $selectedPreset = Show-PresetMenu
+}
 
-    $configMap = @{
-        "basic" = "basic-apps-config.json"
-        "dev" = "dev-tools-config.json"
-        "community" = "community-config.json"
-        "gaming" = "gaming-config.json"
-    }
+# Interactive loop
+while ($continueRunning) {
+    # Run workflow (will show menu)
+    $result = Invoke-MainWorkflow -ExecutionMode $Mode -ForceFlag $Force
 
-    $configFile = $configMap[$selectedPreset]
-
-    if ($Mode -eq 'remote') {
-        $configUrl = "$GitHubRepo/$configFile"
-        $applications = Get-WebConfig -ConfigUrl $configUrl
+    if ($result) {
+        # Show continue prompt
+        $continueRunning = Show-ContinuePrompt
     } else {
-        $configPath = Join-Path $PSScriptRoot $configFile
-
-        # If local file doesn't exist, fallback to remote
-        if (-not (Test-Path $configPath)) {
-            Write-WarningMsg "Local config not found, downloading from GitHub..."
-            $configUrl = "$GitHubRepo/$configFile"
-            $applications = Get-WebConfig -ConfigUrl $configUrl
-        } else {
-            $applications = Get-ApplicationConfig -ConfigPath $configPath
-        }
+        $continueRunning = $false
     }
 }
 
-# Validate applications loaded
-if (-not $applications -or $applications.Count -eq 0) {
-    Write-ErrorMsg "No applications found in configuration"
-    exit 1
-}
-
-# Display applications to process
-Write-ColorOutput "`n========================================" -Color Magenta
-Write-ColorOutput "  Applications to Process: $($applications.Count)" -Color Magenta
-Write-ColorOutput "========================================" -Color Magenta
-
-foreach ($app in $applications) {
-    $appName = if ($app.name) { $app.name } else { $app.Name }
-    $appVersion = if ($app.version) { $app.version } else { if ($app.Version) { $app.Version } else { $null } }
-    $versionText = if ($appVersion) { "v$appVersion" } else { "latest" }
-    Write-ColorOutput "  * $appName ($versionText)" -Color White
-}
-
-Write-ColorOutput "========================================`n" -Color Magenta
-
-# Confirm before proceeding
-$confirm = Read-Host "Do you want to proceed? (Y/N)"
-if ($confirm -ne 'Y' -and $confirm -ne 'y') {
-    Write-Info "Operation cancelled"
-    exit 0
-}
-
-# Execute selected action
-switch ($Action) {
-    'Install' {
-        Invoke-InstallMode -Applications $applications
-    }
-    'Update' {
-        Invoke-UpdateMode -Applications $applications -AllowReinstall $Force
-    }
-    'Uninstall' {
-        Invoke-UninstallMode -Applications $applications
-    }
-    'List' {
-        Show-InstalledPackages -Applications $applications
-    }
-}
-
-Write-Success "Operation completed!"
-
-# Keep window open if requested
-if ($KeepWindowOpen) {
-    Write-Host ""
-    Read-Host "Press Enter to close this window"
-}
+Write-Info "Thank you for using VSBTek Chocolatey Manager!"
 
 <#
 .SYNOPSIS
