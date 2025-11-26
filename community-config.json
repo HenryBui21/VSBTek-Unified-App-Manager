@@ -11,11 +11,6 @@
       "params": []
     },
     {
-      "name": "slack",
-      "version": null,
-      "params": []
-    },
-    {
       "name": "zalopc",
       "version": null,
       "params": []
