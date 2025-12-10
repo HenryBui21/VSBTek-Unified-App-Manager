@@ -1,8 +1,0 @@
-{
-  "files.encoding": "utf8bom",
-  "files.eol": "\r\n",
-  "[powershell]": {
-    "files.encoding": "utf8bom",
-    "files.eol": "\r\n"
-  }
-}
