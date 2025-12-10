@@ -18,3 +18,16 @@ Desktop.ini
 
 # PowerShell
 *.ps1.bak
+
+# IDE and Editor Settings (user-specific)
+.vscode/
+.vs/
+.idea/
+
+# Claude Code Settings (user-specific)
+.claude/
+
+# Temporary files
+*.tmp
+temp/
+tmp/
