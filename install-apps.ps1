@@ -488,7 +488,7 @@ function Show-CheckboxSelectionForm {
 
     foreach ($group in $groupedApps) {
         # Add category header (disabled, just for visual)
-        $headerIndex = $checkedListBox.Items.Add("--- $($group.Name) ---")
+        $headerIndex = $checkedListBox.Items.Add("--- $($group.Name.ToUpper()) ---")
         $checkedListBox.SetItemCheckState($headerIndex, 'Indeterminate')
 
         # Add apps in this category
