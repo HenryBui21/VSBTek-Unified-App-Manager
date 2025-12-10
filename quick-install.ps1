@@ -41,7 +41,7 @@ try {
     # Download and verify SHA256 checksum
     Write-Host "Verifying file integrity..." -ForegroundColor Yellow
     try {
-        $sha256UrlWithCache = "$sha256Url?cb=$cacheBuster"
+        $sha256UrlWithCache = $sha256Url + "?cb=$cacheBuster"
         $expectedHash = (Invoke-RestMethod -Uri $sha256UrlWithCache -Headers @{"Cache-Control"="no-cache"} -TimeoutSec 10 -ErrorAction Stop).Trim().ToLower()
         $actualHash = (Get-FileHash -Path $tempPath -Algorithm SHA256).Hash.ToLower()
 
