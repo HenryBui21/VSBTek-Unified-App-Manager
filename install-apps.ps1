@@ -488,7 +488,7 @@ function Show-CheckboxSelectionForm {
 
     foreach ($group in $groupedApps) {
         # Add category header (disabled, just for visual)
-        $headerIndex = $checkedListBox.Items.Add("--- $($group.Name.ToUpper()) ---")
+        $headerIndex = $checkedListBox.Items.Add("=== $($group.Name.ToUpper()) ===")
         $checkedListBox.SetItemCheckState($headerIndex, 'Indeterminate')
 
         # Add apps in this category
@@ -1189,7 +1189,7 @@ function Show-MainMenu {
         Write-ColorOutput "  VSBTek Chocolatey Manager" -Color Cyan
         Write-ColorOutput "========================================" -Color Cyan
         Write-Host ""
-        Write-Host "  1. Install applications (from preset)"
+        Write-Host "  1. Install applications"
         Write-Host "  2. Update applications"
         Write-Host "  3. Uninstall applications"
         Write-Host "  4. List installed applications"
