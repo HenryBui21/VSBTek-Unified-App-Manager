@@ -58,7 +58,7 @@
     {
       "name": "patch-my-pc",
       "version": null,
-      "params": []
+      "params": ["--ignore-checksums"]
     },
     {
       "name": "unikey",
@@ -88,7 +88,7 @@
     {
       "name": "winaero-tweaker",
       "version": null,
-      "params": []
+      "params": ["--ignore-checksums"]
     },
     {
       "name": "powertoys",
