@@ -23,6 +23,9 @@ Desktop.ini
 # Testing/utility scripts (local only)
 verify-hash.ps1
 verify-github-hash.ps1
+check-github-sync.ps1
+simulate-quick-install.ps1
+update-sha256.ps1
 test-*.ps1
 
 # IDE and Editor Settings (user-specific)
