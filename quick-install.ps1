@@ -13,9 +13,13 @@ try {
     # Download the main script with cache-busting
     $cacheBuster = [DateTime]::UtcNow.Ticks
     $urlWithCache = "$scriptUrl?cb=$cacheBuster"
-    $content = Invoke-RestMethod -Uri $urlWithCache -Headers @{"Cache-Control"="no-cache"} -TimeoutSec 30 -ErrorAction Stop
+
+    # Use Invoke-WebRequest with -OutFile to preserve exact file bytes (no line-ending conversion)
+    # This is critical for SHA256 hash verification
+    Invoke-WebRequest -Uri $urlWithCache -OutFile $tempPath -Headers @{"Cache-Control"="no-cache"} -TimeoutSec 30 -ErrorAction Stop
 
     # Verify it's actually a PowerShell script (not HTML)
+    $content = Get-Content -Path $tempPath -Raw
     if ($content -match "^\s*<(!DOCTYPE|html|head|body)" -or $content -match "html,\s*body\s*\{") {
         Write-Host "" -ForegroundColor Red
         Write-Host "Error: Downloaded file is HTML, not a PowerShell script!" -ForegroundColor Red
@@ -32,11 +36,11 @@ try {
         Write-Host "  git clone https://github.com/HenryBui21/VSBTek-Chocolatey-Installer.git" -ForegroundColor Gray
         Write-Host "  cd VSBTek-Chocolatey-Installer" -ForegroundColor Gray
         Write-Host "  .\install-apps.ps1" -ForegroundColor Gray
+
+        # Clean up and exit
+        Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
         exit 1
     }
-
-    # Save to temp file
-    $content | Out-File -FilePath $tempPath -Encoding UTF8 -Force
 
     # Download and verify SHA256 checksum
     Write-Host "Verifying file integrity..." -ForegroundColor Yellow
