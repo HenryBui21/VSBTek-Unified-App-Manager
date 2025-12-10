@@ -102,6 +102,42 @@ Gaming platform và tiện ích:
 - **Monitoring**: HWiNFO, CrystalDiskInfo, CPU-Z
 - **Media**: VLC
 
+### 🎯 Custom Selection - TỰ CHỌN ỨNG DỤNG
+
+**MỚI!** Không muốn cài cả preset? Chọn từng ứng dụng riêng lẻ!
+
+**2 chế độ lựa chọn:**
+
+1. **GUI Mode (Out-GridView)** - Khuyên dùng
+   - Cửa sổ đồ họa với checkboxes
+   - Search/filter apps theo tên
+   - Ctrl+Click để chọn nhiều apps
+   - Hoạt động trên Windows 10/11
+
+2. **Text Mode** - Fallback tự động
+   - Menu dạng text nếu GUI không available
+   - Chọn bằng số: `1,3,5` hoặc range `1-10`
+   - Type `all` để chọn tất cả
+
+**Cách sử dụng:**
+```powershell
+# Interactive mode - chọn option "5. Custom Selection"
+.\install-apps.ps1
+
+# Hoặc command-line trực tiếp
+.\install-apps.ps1 -Preset custom
+```
+
+**Ví dụ Out-GridView:**
+![image](https://user-images.githubusercontent.com/sample/outgridview.png)
+```
+Hiển thị tất cả ~44 apps từ 4 categories:
+✓ Chrome [Basic Apps]
+✓ VSCode [Dev Tools]
+✓ Discord [Gaming]
+... user chọn và click OK
+```
+
 ## Các chế độ hoạt động
 
 ### 1. Install Mode (Mặc định)
@@ -185,6 +221,7 @@ Format file JSON:
 ✅ **Auto-elevation** - tự xin quyền Administrator
 ✅ **5 chế độ hoạt động**: Install, Update, Uninstall, List, Upgrade
 ✅ **Cài hàng loạt** từ JSON config hoặc preset
+✅ **Custom Selection** 🆕 - Tự chọn apps riêng lẻ (GUI hoặc text mode)
 ✅ **Remote execution** qua web với GitHub integration
 ✅ **Interactive menus** - dễ sử dụng không cần tham số
 ✅ **Package detection** - kiểm tra Windows Registry

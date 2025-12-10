@@ -304,6 +304,222 @@ function Get-ConfigApplications {
     return $applications
 }
 
+function Get-AllAvailableApps {
+    param([string]$Mode = 'local')
+
+    Write-Info "Loading all available applications from presets..."
+
+    $allApps = @()
+    $categories = @{
+        'basic' = 'Basic Apps'
+        'dev' = 'Dev Tools'
+        'community' = 'Community'
+        'gaming' = 'Gaming'
+    }
+
+    foreach ($presetKey in $categories.Keys) {
+        $configFileName = $script:PresetConfigMap[$presetKey]
+        $categoryName = $categories[$presetKey]
+
+        try {
+            if ($Mode -eq 'remote') {
+                $configUrl = "$GitHubRepo/$configFileName"
+                $apps = Get-WebConfig -ConfigUrl $configUrl
+            } else {
+                $configPath = Join-Path $PSScriptRoot $configFileName
+                if (-not (Test-Path $configPath)) {
+                    Write-WarningMsg "Local config not found: $configFileName, skipping..."
+                    continue
+                }
+                $apps = Get-ApplicationConfig -ConfigPath $configPath
+            }
+
+            if ($apps) {
+                foreach ($app in $apps) {
+                    $allApps += [PSCustomObject]@{
+                        Name = $app.name
+                        Category = $categoryName
+                        Version = $app.version
+                        Params = $app.params
+                        DisplayName = "$($app.name) [$categoryName]"
+                    }
+                }
+            }
+        }
+        catch {
+            Write-WarningMsg "Failed to load preset '$presetKey': $($_.Exception.Message)"
+        }
+    }
+
+    Write-Success "Loaded $($allApps.Count) applications from all presets"
+    return $allApps
+}
+
+function Show-CustomSelectionMenu {
+    param([string]$Mode = 'local')
+
+    Write-ColorOutput "`n========================================" -Color Cyan
+    Write-ColorOutput "  Custom Application Selection" -Color Cyan
+    Write-ColorOutput "========================================`n" -Color Cyan
+
+    # Load all available apps
+    $allApps = Get-AllAvailableApps -Mode $Mode
+
+    if (-not $allApps -or $allApps.Count -eq 0) {
+        Write-ErrorMsg "No applications found in presets"
+        return $null
+    }
+
+    # Try Out-GridView first (GUI mode)
+    $supportsGridView = $true
+    try {
+        # Test if Out-GridView is available
+        $null = Get-Command Out-GridView -ErrorAction Stop
+    }
+    catch {
+        $supportsGridView = $false
+    }
+
+    if ($supportsGridView) {
+        Write-Info "Opening selection window (Out-GridView)..."
+        Write-Host "  - Use checkboxes to select apps"
+        Write-Host "  - Use search box to filter"
+        Write-Host "  - Click OK when done"
+        Write-Host ""
+
+        try {
+            $selected = $allApps | Select-Object DisplayName, Category, Name, Version |
+                Out-GridView -Title "Select Applications to Install (use Ctrl+Click for multiple)" -PassThru
+
+            if ($selected) {
+                # Convert back to application objects
+                $selectedApps = @()
+                foreach ($item in $selected) {
+                    $app = $allApps | Where-Object { $_.Name -eq $item.Name }
+                    if ($app) {
+                        $selectedApps += [PSCustomObject]@{
+                            name = $app.Name
+                            version = $app.Version
+                            params = $app.Params
+                        }
+                    }
+                }
+
+                Write-Success "Selected $($selectedApps.Count) applications"
+                return $selectedApps
+            } else {
+                Write-Info "No applications selected"
+                return $null
+            }
+        }
+        catch {
+            Write-WarningMsg "Out-GridView failed: $($_.Exception.Message)"
+            Write-Info "Falling back to text-based selection..."
+            $supportsGridView = $false
+        }
+    }
+
+    # Fallback: Text-based selection
+    if (-not $supportsGridView) {
+        return Show-TextBasedSelection -Apps $allApps
+    }
+}
+
+function Show-TextBasedSelection {
+    param([array]$Apps)
+
+    Write-ColorOutput "`n========================================" -Color Yellow
+    Write-ColorOutput "  Text-Based Application Selection" -Color Yellow
+    Write-ColorOutput "========================================`n" -Color Yellow
+
+    # Group by category for better display
+    $groupedApps = $Apps | Group-Object -Property Category
+
+    $index = 1
+    $appIndexMap = @{}
+
+    foreach ($group in $groupedApps) {
+        Write-ColorOutput "`n  $($group.Name):" -Color Cyan
+        foreach ($app in $group.Group) {
+            Write-Host "    [$index] $($app.Name)"
+            $appIndexMap[$index] = $app
+            $index++
+        }
+    }
+
+    Write-Host ""
+    Write-Host "Enter numbers to select apps (comma-separated, e.g., '1,3,5-7')" -ForegroundColor White
+    Write-Host "Or type 'all' to select all apps, 'cancel' to abort" -ForegroundColor Gray
+    Write-Host ""
+
+    $selection = Read-Host "Your selection"
+
+    if ($selection -eq 'cancel') {
+        Write-Info "Selection cancelled"
+        return $null
+    }
+
+    $selectedApps = @()
+
+    if ($selection -eq 'all') {
+        # Select all apps
+        foreach ($app in $Apps) {
+            $selectedApps += [PSCustomObject]@{
+                name = $app.Name
+                version = $app.Version
+                params = $app.Params
+            }
+        }
+    } else {
+        # Parse selection
+        $parts = $selection -split ',' | ForEach-Object { $_.Trim() }
+
+        foreach ($part in $parts) {
+            if ($part -match '^(\d+)-(\d+)$') {
+                # Range (e.g., "5-7")
+                $start = [int]$matches[1]
+                $end = [int]$matches[2]
+                for ($i = $start; $i -le $end; $i++) {
+                    if ($appIndexMap.ContainsKey($i)) {
+                        $app = $appIndexMap[$i]
+                        $selectedApps += [PSCustomObject]@{
+                            name = $app.Name
+                            version = $app.Version
+                            params = $app.Params
+                        }
+                    }
+                }
+            } elseif ($part -match '^\d+$') {
+                # Single number
+                $num = [int]$part
+                if ($appIndexMap.ContainsKey($num)) {
+                    $app = $appIndexMap[$num]
+                    $selectedApps += [PSCustomObject]@{
+                        name = $app.Name
+                        version = $app.Version
+                        params = $app.Params
+                    }
+                }
+            }
+        }
+    }
+
+    if ($selectedApps.Count -gt 0) {
+        Write-Success "Selected $($selectedApps.Count) applications:"
+        foreach ($app in $selectedApps) {
+            Write-Host "  - $($app.name)" -ForegroundColor Gray
+        }
+        Write-Host ""
+        $confirm = Read-Host "Proceed with installation? (y/n)"
+        if ($confirm -eq 'y') {
+            return $selectedApps
+        }
+    }
+
+    Write-Info "No applications selected or installation cancelled"
+    return $null
+}
+
 # ============================================================================
 # HELPER FUNCTIONS - PACKAGE DETECTION
 # ============================================================================
@@ -859,17 +1075,19 @@ function Show-PresetMenu {
         Write-Host "  2. Dev Tools (13 apps) - IDEs, Git, Docker, etc."
         Write-Host "  3. Community (4 apps) - Teams, Zoom, Telegram, Zalo"
         Write-Host "  4. Gaming (9 apps) - Steam, Discord, OBS, etc."
-        Write-Host "  5. Cancel"
+        Write-Host "  5. Custom Selection - Pick individual apps from all categories"
+        Write-Host "  6. Cancel"
         Write-Host ""
 
-        $choice = Read-Host "Enter your choice (1-5)"
+        $choice = Read-Host "Enter your choice (1-6)"
 
         switch ($choice) {
             '1' { return 'basic' }
             '2' { return 'dev' }
             '3' { return 'community' }
             '4' { return 'gaming' }
-            '5' {
+            '5' { return 'custom' }
+            '6' {
                 Write-Info "Cancelled"
                 exit 0
             }
@@ -1055,11 +1273,19 @@ function Invoke-MainWorkflow {
 
     if ($InitialPreset -or $InitialConfigFile) {
         # Use preset or config file directly
-        $applications = Get-ConfigApplications -Preset $InitialPreset -ConfigFile $InitialConfigFile -Mode $ExecutionMode
+        if ($InitialPreset -eq 'custom') {
+            $applications = Show-CustomSelectionMenu -Mode $ExecutionMode
+        } else {
+            $applications = Get-ConfigApplications -Preset $InitialPreset -ConfigFile $InitialConfigFile -Mode $ExecutionMode
+        }
     } else {
         # Show preset menu and get applications
         $selectedPreset = Show-PresetMenu
-        $applications = Get-ConfigApplications -Preset $selectedPreset -Mode $ExecutionMode
+        if ($selectedPreset -eq 'custom') {
+            $applications = Show-CustomSelectionMenu -Mode $ExecutionMode
+        } else {
+            $applications = Get-ConfigApplications -Preset $selectedPreset -Mode $ExecutionMode
+        }
     }
 
     # Validate applications loaded
