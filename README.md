@@ -241,8 +241,12 @@ VSBTek-Chocolatey-Installer/
 Nếu bạn muốn contribute hoặc develop locally:
 
 1. **Quick setup**: Chạy `.\setup-dev.ps1` để setup Git hooks và verify structure
+   - Script này là **standalone** - không cần external dependencies
+   - Tự động cài Git hook để auto-update SHA256 hash khi commit
+
 2. **Documentation**: Xem [docs/AUTOMATION-README.md](docs/AUTOMATION-README.md) để hiểu về automation system
-3. **Scripts**: Development utilities và tests nằm trong `scripts/` (local only, không commit lên Git)
+
+3. **Optional tools**: Development utilities và tests có thể tạo trong `scripts/` (local only, không commit lên Git)
 
 ## Xử lý sự cố
 
