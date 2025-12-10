@@ -20,7 +20,32 @@ if ($response -ne 'y') {
 
 Write-Host ""
 Write-Host "[1/2] Installing Git hooks..." -ForegroundColor Yellow
-& ".\scripts\utils\install-git-hooks.ps1"
+
+# Check if hook already exists
+$hookPath = ".git\hooks\pre-commit"
+if (Test-Path $hookPath) {
+    Write-Host "  Pre-commit hook already exists." -ForegroundColor Yellow
+    $overwrite = Read-Host "  Overwrite existing hook? (y/n)"
+    if ($overwrite -ne 'y') {
+        Write-Host "  Skipping hook installation." -ForegroundColor Cyan
+    } else {
+        & ".\scripts\utils\install-git-hooks.ps1" -Force
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host ""
+            Write-Host "Failed to install Git hooks. Please check the error above." -ForegroundColor Red
+            Write-Host ""
+            exit 1
+        }
+    }
+} else {
+    & ".\scripts\utils\install-git-hooks.ps1" -Force
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "Failed to install Git hooks. Please check the error above." -ForegroundColor Red
+        Write-Host ""
+        exit 1
+    }
+}
 
 Write-Host ""
 Write-Host "[2/2] Verifying repository..." -ForegroundColor Yellow
