@@ -53,6 +53,7 @@ $ProgressPreference = 'SilentlyContinue'
 $script:ChocoPackagesCache = $null
 $script:CacheTimestamp = $null
 $script:CacheExpiryMinutes = 5
+$script:WingetListCache = $null
 
 # Known presets for display names and backward compatibility
 $script:KnownPresets = @{
@@ -1212,6 +1213,18 @@ function Uninstall-ChocoPackage {
     }
 }
 
+function Get-WingetListCache {
+    param([bool]$ForceRefresh = $false)
+
+    if ($ForceRefresh -or -not $script:WingetListCache) {
+        if (Get-Command winget -ErrorAction SilentlyContinue) {
+            # Capture raw output of winget list for fast checking
+            $script:WingetListCache = winget list --accept-source-agreements 2>&1
+        }
+    }
+    return $script:WingetListCache
+}
+
 function Show-InstalledPackages {
     param([array]$Applications)
 
@@ -1221,27 +1234,35 @@ function Show-InstalledPackages {
 
     # Get all Chocolatey packages using cache for better performance
     $chocoPackages = Get-ChocoPackagesCache
+    $wingetList = Get-WingetListCache
 
     foreach ($app in $Applications) {
         $appName = if ($app.name) { $app.name } else { $app.Name }
-        $isInstalled = Test-PackageInstalled -PackageName $appName
+        
+        # 1. Check Choco
         $isChocoInstalled = $chocoPackages.ContainsKey($appName)
+        
+        # 2. Check Winget
+        $wingetId = Resolve-WingetId -Name $appName
+        $isWingetInstalled = $false
+        if ($wingetList) {
+            # Simple check: does the ID appear in the list? (Surrounded by whitespace to avoid partial matches)
+            $pattern = "\s" + [regex]::Escape($wingetId) + "\s"
+            $isWingetInstalled = ($wingetList -match $pattern).Count -gt 0
+        }
 
-        if ($isInstalled) {
-            $statusText = if ($isChocoInstalled) { "[OK]" } else { "[OK*]" }
-            Write-ColorOutput "  $statusText $appName" -Color Green
+        # 3. Check Registry (Fallback)
+        $isRegInstalled = Test-PackageInstalled -PackageName $appName
 
-            if ($isChocoInstalled) {
-                $installedVersion = $chocoPackages[$appName]
-                Write-ColorOutput "    Chocolatey: v$installedVersion" -Color Gray
-
-                $appVersion = if ($app.version) { $app.version } else { $app.Version }
-                if ($appVersion -and $appVersion -ne $installedVersion) {
-                    Write-ColorOutput "    Config: v$appVersion" -Color Yellow
-                }
-            } else {
-                Write-ColorOutput "    Installed via Windows (not Chocolatey)" -Color Gray
-            }
+        if ($isChocoInstalled) {
+            Write-ColorOutput "  [Choco] $appName" -Color Green
+            Write-ColorOutput "    Version: v$($chocoPackages[$appName])" -Color Gray
+        } elseif ($isWingetInstalled) {
+            Write-ColorOutput "  [Winget] $appName" -Color Cyan
+            Write-ColorOutput "    Managed by Winget ($wingetId)" -Color Gray
+        } elseif ($isRegInstalled) {
+            Write-ColorOutput "  [Manual] $appName" -Color Yellow
+            Write-ColorOutput "    Installed via Windows (Unmanaged)" -Color Gray
         } else {
             Write-ColorOutput "  [X] $appName" -Color Red
             Write-ColorOutput "    Not installed" -Color Gray
@@ -1251,9 +1272,10 @@ function Show-InstalledPackages {
     }
 
     Write-ColorOutput "`nLegend:" -Color Cyan
-    Write-ColorOutput "  [OK]  = Installed via Chocolatey" -Color Gray
-    Write-ColorOutput "  [OK*] = Installed via Windows (cannot update via Chocolatey)" -Color Gray
-    Write-ColorOutput "  [X]   = Not installed" -Color Gray
+    Write-ColorOutput "  [Choco]  = Managed by Chocolatey" -Color Green
+    Write-ColorOutput "  [Winget] = Managed by Winget" -Color Cyan
+    Write-ColorOutput "  [Manual] = Installed manually (Registry detected)" -Color Yellow
+    Write-ColorOutput "  [X]      = Not installed" -Color Red
 }
 
 function Invoke-UpgradeAll {
@@ -1320,7 +1342,11 @@ function Get-RemoteWingetVersion {
     # We use --accept-source-agreements to avoid prompts
     $output = winget show --id $target --exact --accept-source-agreements 2>&1
     foreach ($line in $output) {
-        if ($line -match "Version:\s+(.+)") {
+        # Match "Version: 1.2.3" or localized "Phiên bản: 1.2.3"
+        # Also matches generic pattern: Word followed by colon and version-like number
+        if ($line -match "^(Version|Phiên bản|Ver\.|Versie|Versão)[\w\s]*:\s+([0-9]+\.[0-9\.]+.*)$") {
+            return $matches[2].Trim()
+        } elseif ($line -match "^Version:\s+(.+)$") {
             return $matches[1].Trim()
         }
     }
@@ -1338,7 +1364,11 @@ function Get-PreferredSource {
 
     if ($wVer -and $cVer) {
         Write-Info "  Winget: $wVer | Chocolatey: $cVer"
-        if ((Compare-Versions $wVer $cVer) -ge 0) { return 'Winget' }
+        if ((Compare-Versions $wVer $cVer) -ge 0) { 
+            return 'Winget' 
+        } else {
+            return 'Choco'
+        }
     } elseif ($wVer) {
         Write-Info "  Found on Winget ($wVer)"
         return 'Winget'
@@ -1720,6 +1750,9 @@ function Invoke-UpdateMode {
         Write-Host ""
     }
 
+    # Refresh cache to ensure accurate status for updates
+    $chocoPackages = Get-ChocoPackagesCache -ForceRefresh $true
+
     $successCount = 0
     $failCount = 0
     $totalCount = $Applications.Count
@@ -1732,7 +1765,16 @@ function Invoke-UpdateMode {
 
         Write-ColorOutput "`n[$currentIndex/$totalCount] Processing: $appName" -Color Cyan
 
-        if ($UseWinget) {
+        # Determine primary source based on installation status
+        # If managed by Chocolatey, prefer Chocolatey to keep DB in sync
+        $isChocoManaged = $chocoPackages.ContainsKey($appName)
+        $primarySource = 'Choco'
+        
+        if ($UseWinget -and -not $isChocoManaged) {
+            $primarySource = 'Winget'
+        }
+
+        if ($primarySource -eq 'Winget') {
             $updated = Update-WingetPackage -PackageName $appName -Version $appVersion
             if (-not $updated) {
                 Write-WarningMsg "Winget update failed or not applicable. Attempting fallback to Chocolatey..."
@@ -1740,6 +1782,10 @@ function Invoke-UpdateMode {
             }
         } else {
             $updated = Update-ChocoPackage -PackageName $appName -Version $appVersion -AllowReinstall:$AllowReinstall
+            if (-not $updated -and $UseWinget) {
+                Write-WarningMsg "Chocolatey update failed. Attempting fallback to Winget..."
+                $updated = Update-WingetPackage -PackageName $appName -Version $appVersion
+            }
         }
 
         if ($updated) {
@@ -1774,6 +1820,9 @@ function Invoke-UninstallMode {
         exit 0
     }
 
+    # Refresh cache to ensure accurate status for uninstall
+    $chocoPackages = Get-ChocoPackagesCache -ForceRefresh $true
+
     $successCount = 0
     $failCount = 0
     $totalCount = $Applications.Count
@@ -1785,7 +1834,16 @@ function Invoke-UninstallMode {
 
         Write-ColorOutput "`n[$currentIndex/$totalCount] Processing: $appName" -Color Cyan
 
-        if ($UseWinget) {
+        # Determine primary source based on installation status
+        # If managed by Chocolatey, prefer Chocolatey to ensure clean removal
+        $isChocoManaged = $chocoPackages.ContainsKey($appName)
+        $primarySource = 'Choco'
+        
+        if ($UseWinget -and -not $isChocoManaged) {
+            $primarySource = 'Winget'
+        }
+
+        if ($primarySource -eq 'Winget') {
             $uninstalled = Uninstall-WingetPackage -PackageName $appName
             if (-not $uninstalled) {
                 Write-WarningMsg "Winget uninstall failed. Attempting fallback to Chocolatey..."
@@ -1793,6 +1851,10 @@ function Invoke-UninstallMode {
             }
         } else {
             $uninstalled = Uninstall-ChocoPackage -PackageName $appName -ForceUninstall $Force
+            if (-not $uninstalled -and $UseWinget) {
+                Write-WarningMsg "Chocolatey uninstall failed. Attempting fallback to Winget..."
+                $uninstalled = Uninstall-WingetPackage -PackageName $appName
+            }
         }
 
         if ($uninstalled) {
@@ -1956,6 +2018,12 @@ Write-Info "Checking Winget status..."
 if (Get-Command winget -ErrorAction SilentlyContinue) {
     Write-Success "Winget is installed"
     winget --version
+    
+    # Auto-enable Winget integration if available and not explicitly disabled
+    if (-not $UseWinget) {
+        Write-Info "Auto-enabling Winget integration."
+        $UseWinget = $true
+    }
 } else {
     Write-WarningMsg "Winget is NOT installed"
     if ([Environment]::OSVersion.Version.Build -ge 16299) {
