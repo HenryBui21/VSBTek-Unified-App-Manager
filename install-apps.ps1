@@ -88,6 +88,29 @@ try {
     # Silent failure - mapping will be empty, fallback to direct name usage
 }
 
+# Global package policy
+$script:PackagePolicy = @{
+    "pinned" = @()
+    "preferChoco" = @()
+    "preferWinget" = @()
+}
+
+try {
+    $policyFile = "package-policy.json"
+    $localPolicyPath = Join-Path $PSScriptRoot $policyFile
+    if (Test-Path $localPolicyPath) {
+        $jsonPolicy = Get-Content $localPolicyPath -Raw | ConvertFrom-Json
+        if ($jsonPolicy.pinned) { $script:PackagePolicy.pinned = [array]$jsonPolicy.pinned }
+        if ($jsonPolicy.preferChoco) { $script:PackagePolicy.preferChoco = [array]$jsonPolicy.preferChoco }
+        if ($jsonPolicy.preferWinget) { $script:PackagePolicy.preferWinget = [array]$jsonPolicy.preferWinget }
+    }
+} catch {}
+
+function Save-PackagePolicy {
+    $policyFile = Join-Path $PSScriptRoot "package-policy.json"
+    $script:PackagePolicy | ConvertTo-Json -Depth 2 | Out-File $policyFile -Encoding UTF8
+}
+
 # ============================================================================
 # AUTO-ELEVATION
 # ============================================================================
@@ -1219,6 +1242,22 @@ function Uninstall-ChocoPackage {
     }
 }
 
+function Set-ChocoPin {
+    param([string]$PackageName)
+    Write-Info "Pinning $PackageName in Chocolatey..."
+    try {
+        $null = & choco pin add -n $PackageName -y 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "$PackageName pinned successfully"
+        } else {
+            Write-WarningMsg "Failed to pin $PackageName"
+        }
+    } catch {
+        Write-WarningMsg "Failed to pin ${PackageName}: $($_.Exception.Message)"
+        return  $false
+    }
+}
+
 function Get-WingetListCache {
     param([bool]$ForceRefresh = $false)
 
@@ -1360,8 +1399,18 @@ function Get-RemoteWingetVersion {
 }
 
 function Get-PreferredSource {
-    param([string]$AppName, [bool]$UseWinget)
+    param([string]$AppName, [bool]$UseWinget, [string]$ExplicitSource = $null)
     
+    # 1. Check Global Policy (Highest Priority)
+    if ($script:PackagePolicy.preferChoco -contains $AppName.ToLower()) { return 'Choco' }
+    if ($script:PackagePolicy.preferWinget -contains $AppName.ToLower()) { return 'Winget' }
+
+    # 2. Check Explicit Source from Config
+    if ($ExplicitSource) {
+        if ($ExplicitSource -match 'winget') { return 'Winget' }
+        return 'Choco'
+    }
+
     if (-not $UseWinget) { return 'Choco' }
     
     Write-Info "Checking available versions..."
@@ -1579,6 +1628,22 @@ function Uninstall-WingetPackage {
     return $false
 }
 
+function Set-WingetPin {
+    param([string]$PackageName)
+    $target = Resolve-WingetId -Name $PackageName
+    Write-Info "Pinning $target in Winget..."
+    
+    try {
+        # --blocking prevents upgrades
+        $process = Start-Process -FilePath "winget" -ArgumentList "pin", "add", "--id", $target, "--blocking" -Wait -PassThru -NoNewWindow
+        if ($process.ExitCode -eq 0) {
+            Write-Success "$PackageName pinned successfully"
+        }
+    } catch {
+        Write-WarningMsg "Failed to pin $PackageName via Winget"
+    }
+}
+
 # ============================================================================
 # MENU FUNCTIONS
 # ============================================================================
@@ -1605,6 +1670,60 @@ function Show-ContinuePrompt {
     }
 }
 
+function Show-PolicyMenu {
+    while ($true) {
+        Write-ColorOutput "`n========================================" -Color Cyan
+        Write-ColorOutput "  Manage Package Policies" -Color Cyan
+        Write-ColorOutput "========================================" -Color Cyan
+        
+        Write-Host "Current Policies:" -ForegroundColor Yellow
+        Write-Host "  Pinned Apps:   $($script:PackagePolicy.pinned -join ', ')"
+        Write-Host "  Prefer Choco:  $($script:PackagePolicy.preferChoco -join ', ')"
+        Write-Host "  Prefer Winget: $($script:PackagePolicy.preferWinget -join ', ')"
+        Write-Host ""
+        
+        Write-Host "  1. Add 'Pin' rule (Prevent upgrades)"
+        Write-Host "  2. Add 'Prefer Chocolatey' rule"
+        Write-Host "  3. Add 'Prefer Winget' rule"
+        Write-Host "  4. Remove a rule"
+        Write-Host "  5. Back to Main Menu"
+        Write-Host ""
+
+        $choice = Read-Host "Enter choice (1-5)"
+        
+        if ($choice -eq '5') { return }
+        
+        if ($choice -in '1','2','3','4') {
+            $appName = Read-Host "Enter application name (e.g. nodejs)"
+            if ([string]::IsNullOrWhiteSpace($appName)) { continue }
+            $appName = $appName.ToLower()
+            
+            if ($choice -eq '4') {
+                $script:PackagePolicy.pinned = $script:PackagePolicy.pinned | Where-Object { $_ -ne $appName }
+                $script:PackagePolicy.preferChoco = $script:PackagePolicy.preferChoco | Where-Object { $_ -ne $appName }
+                $script:PackagePolicy.preferWinget = $script:PackagePolicy.preferWinget | Where-Object { $_ -ne $appName }
+                Write-Success "Removed rules for $appName"
+            } else {
+                # Remove existing conflicts first
+                $script:PackagePolicy.preferChoco = $script:PackagePolicy.preferChoco | Where-Object { $_ -ne $appName }
+                $script:PackagePolicy.preferWinget = $script:PackagePolicy.preferWinget | Where-Object { $_ -ne $appName }
+                
+                if ($choice -eq '1') {
+                    if ($script:PackagePolicy.pinned -notcontains $appName) { $script:PackagePolicy.pinned += $appName }
+                    Write-Success "Added Pin rule for $appName"
+                } elseif ($choice -eq '2') {
+                    $script:PackagePolicy.preferChoco += $appName
+                    Write-Success "Added Prefer Choco rule for $appName"
+                } elseif ($choice -eq '3') {
+                    $script:PackagePolicy.preferWinget += $appName
+                    Write-Success "Added Prefer Winget rule for $appName"
+                }
+            }
+            Save-PackagePolicy
+        }
+    }
+}
+
 function Show-MainMenu {
     while ($true) {
         Write-ColorOutput "`n========================================" -Color Cyan
@@ -1616,10 +1735,11 @@ function Show-MainMenu {
         Write-Host "  3. Uninstall applications"
         Write-Host "  4. List installed applications"
         Write-Host "  5. Upgrade all packages (Hybrid)"
-        Write-Host "  6. Exit"
+        Write-Host "  6. Manage Package Policies"
+        Write-Host "  7. Exit"
         Write-Host ""
 
-        $choice = Read-Host "Enter your choice (1-6)"
+        $choice = Read-Host "Enter your choice (1-7)"
 
         switch ($choice) {
             '1' { return 'Install' }
@@ -1628,6 +1748,9 @@ function Show-MainMenu {
             '4' { return 'List' }
             '5' { return 'Upgrade' }
             '6' {
+                Show-PolicyMenu
+            }
+            '7' {
                 Write-Info "Exiting..."
                 exit 0
             }
@@ -1696,10 +1819,12 @@ function Invoke-InstallMode {
         $appName = if ($app.name) { $app.name } else { $app.Name }
         $appVersion = if ($app.version) { $app.version } else { $app.Version }
         $appParams = if ($app.params) { $app.params } else { if ($app.Params) { $app.Params } else { @() } }
+        $appSource = if ($app.source) { $app.source } else { $app.Source }
+        $appPin = if ($app.pin) { $app.pin } else { $app.Pin }
 
         Write-ColorOutput "`n[$currentIndex/$totalCount] Processing: $appName" -Color Cyan
 
-        $primarySource = Get-PreferredSource -AppName $appName -UseWinget $UseWinget
+        $primarySource = Get-PreferredSource -AppName $appName -UseWinget $UseWinget -ExplicitSource $appSource
 
         $installed = $false
 
@@ -1721,6 +1846,17 @@ function Invoke-InstallMode {
             $successCount++
         } else {
             $failCount++
+        }
+
+        # Check global policy for pinning
+        if ($script:PackagePolicy.pinned -contains $appName.ToLower()) { $appPin = $true }
+
+        if ($installed -and $appPin) {
+            if ($primarySource -eq 'Winget') {
+                Set-WingetPin -PackageName $appName
+            } else {
+                Set-ChocoPin -PackageName $appName
+            }
         }
 
         Write-Host ""
