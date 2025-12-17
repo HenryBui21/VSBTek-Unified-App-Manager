@@ -1343,13 +1343,36 @@ function Install-Winget {
         
         $releaseUrl = "https://api.github.com/repos/microsoft/winget-cli/releases/latest"
         $release = Invoke-RestMethod -Uri $releaseUrl
-        $asset = $release.assets | Where-Object { $_.name -like "*.msixbundle" } | Select-Object -First 1
         
-        if (-not $asset) { throw "Could not find .msixbundle in latest release" }
+        # 1. Find Main Bundle
+        $bundleAsset = $release.assets | Where-Object { $_.name -like "*.msixbundle" } | Select-Object -First 1
+        if (-not $bundleAsset) { throw "Could not find .msixbundle in latest release" }
         
-        $tempPath = "$env:TEMP\winget.msixbundle"
-        Write-Info "Downloading $($asset.name)..."
-        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempPath
+        # 2. Find Dependencies (VCLibs and UI.Xaml) - Detect Architecture
+        $arch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
+        $depAssets = $release.assets | Where-Object { 
+            ($_.name -match "Microsoft\.UI\.Xaml.*$arch") -or 
+            ($_.name -match "Microsoft\.VCLibs.*$arch") 
+        }
+
+        # 3. Download and Install Dependencies first
+        foreach ($dep in $depAssets) {
+            $depPath = "$env:TEMP\$($dep.name)"
+            Write-Info "Downloading dependency: $($dep.name)..."
+            Invoke-WebRequest -Uri $dep.browser_download_url -OutFile $depPath
+            Write-Info "Installing dependency: $($dep.name)..."
+            try {
+                Add-AppxPackage -Path $depPath -ErrorAction Stop
+            } catch {
+                Write-WarningMsg "Dependency install skipped (likely already newer version): $($_.Exception.Message)"
+            }
+            Remove-Item $depPath -Force -ErrorAction SilentlyContinue
+        }
+        
+        # 4. Download and Install Winget Bundle
+        $tempPath = "$env:TEMP\$($bundleAsset.name)"
+        Write-Info "Downloading $($bundleAsset.name)..."
+        Invoke-WebRequest -Uri $bundleAsset.browser_download_url -OutFile $tempPath
         
         Write-Info "Installing Winget..."
         Add-AppxPackage -Path $tempPath -ForceApplicationShutdown
@@ -1898,7 +1921,15 @@ if (Get-Command winget -ErrorAction SilentlyContinue) {
 } else {
     Write-WarningMsg "Winget is NOT installed"
     if ([Environment]::OSVersion.Version.Build -ge 16299) {
-        Write-Info "Auto-installation will be attempted if Winget features are used."
+        Write-Info "Your OS supports Winget."
+        $install = Read-Host "Do you want to install Winget now? (Y/N)"
+        if ($install -eq 'Y' -or $install -eq 'y') {
+            if (Install-Winget) {
+                Write-Success "Winget installed successfully!"
+            }
+        } else {
+            Write-Info "Skipping Winget installation. Some features may be limited."
+        }
     } else {
         Write-Info "Your OS does not support Winget."
     }
