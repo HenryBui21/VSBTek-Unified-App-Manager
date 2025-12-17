@@ -31,6 +31,9 @@ param(
     [switch]$Force,
 
     [Parameter(Mandatory=$false)]
+    [switch]$UseWinget,
+
+    [Parameter(Mandatory=$false)]
     [switch]$KeepWindowOpen
 )
 
@@ -77,6 +80,7 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
         if ($Preset) { $arguments += " -Preset `"$Preset`"" }
         if ($Mode) { $arguments += " -Mode `"$Mode`"" }
         if ($Force) { $arguments += " -Force" }
+        if ($UseWinget) { $arguments += " -UseWinget" }
         $arguments += " -KeepWindowOpen"
     } else {
         # Running from web (iex & scriptblock)
@@ -85,6 +89,7 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
         if ($Mode) { $arguments += " -Mode '$Mode'" }
         if ($Action) { $arguments += " -Action '$Action'" }
         if ($Force) { $arguments += " -Force" }
+        if ($UseWinget) { $arguments += " -UseWinget" }
         $arguments += " -KeepWindowOpen\`"`""
     }
 
@@ -200,6 +205,17 @@ function Install-Chocolatey {
         Write-ErrorMsg "Failed to install Chocolatey: $($_.Exception.Message)"
         return $false
     }
+}
+
+function Get-RemoteChocoVersion {
+    param([string]$Name)
+    try {
+        $output = choco search $Name --exact --limit-output 2>$null
+        if ($output -match "^$([regex]::Escape($Name))\|(.+)$") {
+            return $matches[1]
+        }
+    } catch {}
+    return $null
 }
 
 # ============================================================================
@@ -937,6 +953,20 @@ function Test-PackageInstalled {
 # HELPER FUNCTIONS - PACKAGE OPERATIONS
 # ============================================================================
 
+function Compare-Versions {
+    param($v1, $v2)
+    # Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+    try {
+        # Normalize versions (remove 'v' prefix if present)
+        $ver1 = [System.Version]($v1 -replace '^v', '')
+        $ver2 = [System.Version]($v2 -replace '^v', '')
+        return $ver1.CompareTo($ver2)
+    } catch {
+        # Fallback to string comparison if parsing fails
+        return [string]::Compare($v1, $v2, $true)
+    }
+}
+
 function Install-ChocoPackage {
     param(
         [string]$PackageName,
@@ -1172,6 +1202,113 @@ function Invoke-UpgradeAll {
 }
 
 # ============================================================================
+# HELPER FUNCTIONS - WINGET
+# ============================================================================
+
+function Get-RemoteWingetVersion {
+    param([string]$Name)
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { return $null }
+    
+    # winget show returns unstructured text, we need to parse "Version: x.y.z"
+    # We use --accept-source-agreements to avoid prompts
+    $output = winget show $Name --accept-source-agreements 2>&1
+    foreach ($line in $output) {
+        if ($line -match "Version:\s+(.+)") {
+            return $matches[1].Trim()
+        }
+    }
+    return $null
+}
+
+function Install-WingetPackage {
+    param(
+        [string]$PackageName,
+        [string]$Version = $null,
+        [array]$Params = @(),
+        [bool]$ForceInstall = $false
+    )
+
+    Write-Info "Installing $PackageName via Winget..."
+
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Write-ErrorMsg "Winget command not found. Please ensure App Installer is installed."
+        return $false
+    }
+
+    try {
+        # Construct arguments
+        # We use --accept-package-agreements and --accept-source-agreements for automation
+        $wingetArgs = @('install', $PackageName, '--accept-package-agreements', '--accept-source-agreements')
+
+        if ($Version) {
+            $wingetArgs += '--version'
+            $wingetArgs += $Version
+        }
+
+        if ($ForceInstall) {
+            $wingetArgs += '--force'
+        }
+
+        # Handle parameters (Winget uses --override for installer args)
+        if ($Params.Count -gt 0) {
+            $overrideArgs = $Params -join ' '
+            $wingetArgs += '--override'
+            $wingetArgs += "$overrideArgs"
+        }
+
+        # Execute Winget
+        $process = Start-Process -FilePath "winget" -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
+
+        if ($process.ExitCode -eq 0) {
+            Write-Success "$PackageName installed successfully via Winget"
+            return $true
+        } else {
+            Write-ErrorMsg "$PackageName installation failed (Exit code: $($process.ExitCode))"
+            return $false
+        }
+    }
+    catch {
+        Write-ErrorMsg "Failed to install $PackageName via Winget: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Update-WingetPackage {
+    param(
+        [string]$PackageName,
+        [string]$Version = $null
+    )
+
+    Write-Info "Updating $PackageName via Winget..."
+
+    $wingetArgs = @('upgrade', $PackageName, '--accept-package-agreements', '--accept-source-agreements')
+    if ($Version) {
+        $wingetArgs += '--version'
+        $wingetArgs += $Version
+    }
+
+    $process = Start-Process -FilePath "winget" -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
+    return ($process.ExitCode -eq 0)
+}
+
+function Uninstall-WingetPackage {
+    param(
+        [string]$PackageName
+    )
+
+    Write-Info "Uninstalling $PackageName via Winget..."
+
+    $wingetArgs = @('uninstall', $PackageName)
+    $process = Start-Process -FilePath "winget" -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
+    
+    if ($process.ExitCode -eq 0) {
+        Write-Success "$PackageName uninstalled successfully"
+        return $true
+    }
+    return $false
+}
+
+# ============================================================================
 # MENU FUNCTIONS
 # ============================================================================
 
@@ -1289,7 +1426,42 @@ function Invoke-InstallMode {
 
         Write-ColorOutput "`n[$currentIndex/$totalCount] Processing: $appName" -Color Cyan
 
-        $installed = Install-ChocoPackage -PackageName $appName -Version $appVersion -Params $appParams -ForceInstall $Force
+        $primarySource = 'Choco'
+
+        if ($UseWinget) {
+            Write-Info "Checking available versions..."
+            $wVer = Get-RemoteWingetVersion -Name $appName
+            $cVer = Get-RemoteChocoVersion -Name $appName
+
+            if ($wVer -and $cVer) {
+                Write-Info "  Winget: $wVer | Chocolatey: $cVer"
+                if ((Compare-Versions $wVer $cVer) -ge 0) { $primarySource = 'Winget' }
+            } elseif ($wVer) {
+                Write-Info "  Found on Winget ($wVer)"
+                $primarySource = 'Winget'
+            } elseif ($cVer) {
+                Write-Info "  Found on Chocolatey ($cVer)"
+                $primarySource = 'Choco'
+            } else {
+                $primarySource = 'Winget' # Default preference if check fails
+            }
+        }
+
+        $installed = $false
+
+        if ($primarySource -eq 'Winget') {
+            $installed = Install-WingetPackage -PackageName $appName -Version $appVersion -Params $appParams -ForceInstall $Force
+            if (-not $installed) {
+                Write-WarningMsg "Winget installation failed. Attempting fallback to Chocolatey..."
+                $installed = Install-ChocoPackage -PackageName $appName -Version $appVersion -Params $appParams -ForceInstall $Force
+            }
+        } else {
+            $installed = Install-ChocoPackage -PackageName $appName -Version $appVersion -Params $appParams -ForceInstall $Force
+            if (-not $installed -and $UseWinget) {
+                Write-WarningMsg "Chocolatey installation failed. Attempting fallback to Winget..."
+                $installed = Install-WingetPackage -PackageName $appName -Version $appVersion -Params $appParams -ForceInstall $Force
+            }
+        }
 
         if ($installed) {
             $successCount++
@@ -1342,7 +1514,11 @@ function Invoke-UpdateMode {
 
         Write-ColorOutput "`n[$currentIndex/$totalCount] Processing: $appName" -Color Cyan
 
-        $updated = Update-ChocoPackage -PackageName $appName -Version $appVersion -AllowReinstall:$AllowReinstall
+        if ($UseWinget) {
+            $updated = Update-WingetPackage -PackageName $appName -Version $appVersion
+        } else {
+            $updated = Update-ChocoPackage -PackageName $appName -Version $appVersion -AllowReinstall:$AllowReinstall
+        }
 
         if ($updated) {
             $successCount++
@@ -1387,7 +1563,11 @@ function Invoke-UninstallMode {
 
         Write-ColorOutput "`n[$currentIndex/$totalCount] Processing: $appName" -Color Cyan
 
-        $uninstalled = Uninstall-ChocoPackage -PackageName $appName -ForceUninstall $Force
+        if ($UseWinget) {
+            $uninstalled = Uninstall-WingetPackage -PackageName $appName
+        } else {
+            $uninstalled = Uninstall-ChocoPackage -PackageName $appName -ForceUninstall $Force
+        }
 
         if ($uninstalled) {
             $successCount++

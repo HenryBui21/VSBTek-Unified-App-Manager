@@ -82,11 +82,21 @@ try {
         Write-Host "Proceeding without verification..." -ForegroundColor Yellow
     }
 
+    # Check for Winget support (Windows 10 1709+ / Build 16299+)
+    $osVersion = [Environment]::OSVersion.Version
+    $isWingetSupported = ($osVersion.Major -ge 10 -and $osVersion.Build -ge 16299)
+    $scriptArgs = @()
+
+    if ($isWingetSupported) {
+        Write-Host "OS supports Winget (Build $($osVersion.Build)). Enabling Winget mode." -ForegroundColor Cyan
+        $scriptArgs += "-UseWinget"
+    }
+
     Write-Host "Starting installation..." -ForegroundColor Green
     Write-Host ""
 
     # Execute the main script with interactive mode
-    & $tempPath
+    & $tempPath @scriptArgs
 
     # Clean up
     Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
