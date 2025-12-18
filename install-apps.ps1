@@ -2273,7 +2273,7 @@ Write-Info "Thank you for using VSBTek Unified App Manager!"
 
 .NOTES
     Author: VSBTek
-    Repository: https://github.com/HenryBui21/VSBTek-Chocolatey-Installer
+    Repository: https://github.com/HenryBui21/VSBTek-Unified-App-Manager
     Requires: Administrator privileges, PowerShell 5.1+, Internet connection
 #>
 ChocolatyIstll

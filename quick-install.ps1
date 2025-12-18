@@ -11,8 +11,8 @@ try {
 } catch {}
 $tempPath = Join-Path $tempDir "vsbtek-install-apps.ps1"
 
-$scriptUrl = "https://raw.githubusercontent.com/HenryBui21/VSBTek-Chocolatey-Installer/main/install-apps.ps1"
-$sha256Url = "https://raw.githubusercontent.com/HenryBui21/VSBTek-Chocolatey-Installer/main/install-apps.ps1.sha256"
+$scriptUrl = "https://raw.githubusercontent.com/HenryBui21/VSBTek-Unified-App-Manager/main/install-apps.ps1"
+$sha256Url = "https://raw.githubusercontent.com/HenryBui21/VSBTek-Unified-App-Manager/main/install-apps.ps1.sha256"
 
 Write-Host "VSBTek Quick Installer" -ForegroundColor Cyan
 Write-Host "Downloading installer script..." -ForegroundColor Yellow
@@ -41,8 +41,8 @@ try {
         Write-Host "  $scriptUrl" -ForegroundColor Cyan
         Write-Host "" -ForegroundColor White
         Write-Host "Alternative: Download manually and run locally:" -ForegroundColor White
-        Write-Host "  git clone https://github.com/HenryBui21/VSBTek-Chocolatey-Installer.git" -ForegroundColor Gray
-        Write-Host "  cd VSBTek-Chocolatey-Installer" -ForegroundColor Gray
+        Write-Host "  git clone https://github.com/HenryBui21/VSBTek-Unified-App-Manager.git" -ForegroundColor Gray
+        Write-Host "  cd VSBTek-Unified-App-Manager" -ForegroundColor Gray
         Write-Host "  .\install-apps.ps1" -ForegroundColor Gray
 
         # Clean up and exit

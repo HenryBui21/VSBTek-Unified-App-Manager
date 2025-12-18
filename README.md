@@ -26,7 +26,7 @@ irm https://raw.githubusercontent.com/HenryBui21/VSBTek-Unified-App-Manager/main
 Tải script về và chạy:
 
 ```powershell
-irm https://raw.githubusercontent.com/HenryBui21/VSBTek-Chocolatey-Installer/main/install-apps.ps1 -OutFile install-apps.ps1
+irm https://raw.githubusercontent.com/HenryBui21/VSBTek-Unified-App-Manager/main/install-apps.ps1 -OutFile install-apps.ps1
 .\install-apps.ps1
 ```
 
@@ -205,7 +205,7 @@ Format file JSON:
 ## Cấu trúc dự án
 
 ```
-VSBTek-Chocolatey-Installer/
+VSBTek-Unified-App-Manager/
 ├── install-apps.ps1              # Script chính (all-in-one)
 ├── install-apps.ps1.sha256       # SHA256 hash cho security verification
 ├── quick-install.ps1             # Wrapper script cho one-liner với SHA256 check
@@ -333,11 +333,11 @@ choco install <package-name> -y --force
 
 ```powershell
 # Thử download lại
-irm https://raw.githubusercontent.com/HenryBui21/VSBTek-Chocolatey-Installer/main/quick-install.ps1 | iex
+irm https://raw.githubusercontent.com/HenryBui21/VSBTek-Unified-App-Manager/main/quick-install.ps1 | iex
 
 # Hoặc dùng local install
-git clone https://github.com/HenryBui21/VSBTek-Chocolatey-Installer.git
-cd VSBTek-Chocolatey-Installer
+git clone https://github.com/HenryBui21/VSBTek-Unified-App-Manager.git
+cd VSBTek-Unified-App-Manager
 .\install-apps.ps1
 ```
 
@@ -428,14 +428,14 @@ Nếu bạn gặp vấn đề không nằm trong list trên:
 
 1. **Kiểm tra logs**: Script có verbose error messages
 2. **Chạy với -Verbose**: `.\install-apps.ps1 -Verbose`
-3. **Báo lỗi tại**: [GitHub Issues](https://github.com/HenryBui21/VSBTek-Chocolatey-Installer/issues)
+3. **Báo lỗi tại**: [GitHub Issues](https://github.com/HenryBui21/VSBTek-Unified-App-Manager/issues)
 4. **Chocolatey Docs**: [https://docs.chocolatey.org/en-us/troubleshooting](https://docs.chocolatey.org/en-us/troubleshooting)
 
 ## Tài nguyên
 
 - [Chocolatey Packages](https://community.chocolatey.org/packages)
 - [Chocolatey Docs](https://docs.chocolatey.org/)
-- [GitHub Repository](https://github.com/HenryBui21/VSBTek-Chocolatey-Installer)
+- [GitHub Repository](https://github.com/HenryBui21/VSBTek-Unified-App-Manager)
 
 ## License
 
