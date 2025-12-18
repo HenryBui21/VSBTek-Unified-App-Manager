@@ -1448,6 +1448,14 @@ function Install-Winget {
         Write-Info "Downloading latest Winget release info..."
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
         
+        # Resolve Temp path safely for special characters
+        $tempDir = $env:TEMP
+        try {
+            if (Test-Path -LiteralPath $tempDir) {
+                $tempDir = (Get-Item -LiteralPath $tempDir).FullName
+            }
+        } catch {}
+        
         $releaseUrl = "https://api.github.com/repos/microsoft/winget-cli/releases/latest"
         $release = Invoke-RestMethod -Uri $releaseUrl
         
@@ -1464,29 +1472,27 @@ function Install-Winget {
 
         # 3. Download and Install Dependencies first
         foreach ($dep in $depAssets) {
-            $depPath = "$env:TEMP\$($dep.name)"
-            Write-Info "Downloading dependency: $($dep.name)..."
+            $depPath = Join-Path $tempDir $dep.name
+            $depPath = "Downloading dependency: $($dep.name)..."
             Invoke-WebRequest -Uri $dep.browser_download_url -OutFile $depPath
             Write-Info "Installing dependency: $($dep.name)..."
             try {
-                Add-AppxPackage -Path $depPath -ErrorAction Stop
+                Add-AppxPackage -LiteralPath $depPath -ErrorAction Stop
             } catch {
                 Write-WarningMsg "Dependency install skipped (likely already newer version): $($_.Exception.Message)"
             }
-            Remove-Item $depPath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $depPath -Force -ErrorAction SilentlyContinue
         }
-        
         # 4. Install Windows App Runtime (Critical Dependency)
         # Winget often requires the Windows App Runtime which is not included in the GitHub release assets.
         Write-Info "Installing Windows App Runtime (Dependency)..."
         try {
             $runtimeUrl = "https://aka.ms/windowsappsdk/latest/stable/windowsappruntimeinstall-$arch.exe"
             # Use unique filename to avoid conflicts/corruption from previous runs
-            $runtimePath = "$env:TEMP\windowsappruntimeinstall-$(Get-Random).exe"
-            
+            $runtimePath = Join-Path $tempDir "windowsappruntimeinstall-$(Get-Random).exe"
             Write-Info "Downloading Windows App Runtime installer..."
             Invoke-WebRequest -Uri $runtimeUrl -OutFile $runtimePath -ErrorAction Stop
-            
+
             if ((Get-Item $runtimePath).Length -lt 10240) {
                 throw "Downloaded file is too small or corrupted (Size: $((Get-Item $runtimePath).Length) bytes)"
             }
@@ -1498,36 +1504,32 @@ function Install-Winget {
                 Write-WarningMsg "Windows App Runtime installer exited with code $($proc.ExitCode)"
             }
             
-            Remove-Item $runtimePath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $runtimePath -Force -ErrorAction SilentlyContinue
         } catch {
             Write-WarningMsg "Could not install Windows App Runtime automatically: $($_.Exception.Message)"
         }
 
         # 5. Download and Install Winget Bundle
-        $tempPath = "$env:TEMP\$($bundleAsset.name)"
+        $tempPath = Join-Path $tempDir $bundleAsset.name
         Write-Info "Downloading $($bundleAsset.name)..."
         Invoke-WebRequest -Uri $bundleAsset.browser_download_url -OutFile $tempPath
         
         Write-Info "Installing Winget..."
-        try {
-            Add-AppxPackage -Path $tempPath -ForceApplicationShutdown -ErrorAction Stop
+            Add-AppxPackage -LiteralPath $tempPath -ForceApplicationShutdown -ErrorAction Stop
         } catch {
             Write-WarningMsg "First attempt failed: $($_.Exception.Message)"
             Write-Info "Retrying installation in 5 seconds..."
             Start-Sleep -Seconds 5
-            Add-AppxPackage -Path $tempPath -ForceApplicationShutdown -ErrorAction Stop
+            Add-AppxPackage -LiteralPath $tempPath -ForceApplicationShutdown -ErrorAction Stop
         }
-        
-        Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
         
         # Refresh env to pick up new path
         Update-SessionEnvironment
-        
-        return (Get-Command winget -ErrorAction SilentlyContinue)
-    } catch {
+        winget -ErrorAction SilentlyContinue
+        } catch {
         Write-ErrorMsg "Failed to install Winget automatically: $($_.Exception.Message)"
-        return $false
-    }
+        return $
 }
 
 function Install-WingetPackage {
@@ -2274,3 +2276,4 @@ Write-Info "Thank you for using VSBTek Unified App Manager!"
     Repository: https://github.com/HenryBui21/VSBTek-Chocolatey-Installer
     Requires: Administrator privileges, PowerShell 5.1+, Internet connection
 #>
+ChocolatyIstll

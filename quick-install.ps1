@@ -2,7 +2,15 @@
 # This lightweight wrapper enables one-liner execution via: irm URL | iex
 # Downloads and executes the main install-apps.ps1 script
 
-$tempPath = "$env:TEMP\vsbtek-install-apps.ps1"
+# Resolve Temp path to handle potential 8.3 short paths or special characters (Vietnamese names)
+$tempDir = $env:TEMP
+try {
+    if (Test-Path -LiteralPath $tempDir) {
+        $tempDir = (Get-Item -LiteralPath $tempDir).FullName
+    }
+} catch {}
+$tempPath = Join-Path $tempDir "vsbtek-install-apps.ps1"
+
 $scriptUrl = "https://raw.githubusercontent.com/HenryBui21/VSBTek-Chocolatey-Installer/main/install-apps.ps1"
 $sha256Url = "https://raw.githubusercontent.com/HenryBui21/VSBTek-Chocolatey-Installer/main/install-apps.ps1.sha256"
 
@@ -19,7 +27,7 @@ try {
     Invoke-WebRequest -Uri $urlWithCache -OutFile $tempPath -Headers @{"Cache-Control"="no-cache"} -TimeoutSec 30 -ErrorAction Stop
 
     # Verify it's actually a PowerShell script (not HTML)
-    $content = Get-Content -Path $tempPath -Raw
+    $content = Get-Content -LiteralPath $tempPath -Raw
     if ($content -match "^\s*<(!DOCTYPE|html|head|body)" -or $content -match "html,\s*body\s*\{") {
         Write-Host "" -ForegroundColor Red
         Write-Host "Error: Downloaded file is HTML, not a PowerShell script!" -ForegroundColor Red
@@ -38,7 +46,7 @@ try {
         Write-Host "  .\install-apps.ps1" -ForegroundColor Gray
 
         # Clean up and exit
-        Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
         exit 1
     }
 
@@ -47,7 +55,7 @@ try {
     try {
         $sha256UrlWithCache = $sha256Url + "?cb=$cacheBuster"
         $expectedHash = (Invoke-RestMethod -Uri $sha256UrlWithCache -Headers @{"Cache-Control"="no-cache"} -TimeoutSec 10 -ErrorAction Stop).Trim().ToLower()
-        $actualHash = (Get-FileHash -Path $tempPath -Algorithm SHA256).Hash.ToLower()
+        $actualHash = (Get-FileHash -LiteralPath $tempPath -Algorithm SHA256).Hash.ToLower()
 
         if ($actualHash -ne $expectedHash) {
             Write-Host "" -ForegroundColor Red
@@ -59,7 +67,7 @@ try {
             Write-Host "Installation aborted for security reasons." -ForegroundColor Red
 
             # Clean up and exit
-            Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
             exit 1
         }
 
@@ -75,7 +83,7 @@ try {
 
         if ($response -ne 'yes') {
             Write-Host "Installation cancelled by user." -ForegroundColor Red
-            Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
             exit 1
         }
 
@@ -99,7 +107,7 @@ try {
     & $tempPath @scriptArgs
 
     # Clean up
-    Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
 }
 catch {
     Write-Host "" -ForegroundColor Red
@@ -112,8 +120,8 @@ catch {
     Write-Host "  3. Firewall/antivirus is not blocking the download" -ForegroundColor Yellow
 
     # Clean up on error
-    if (Test-Path $tempPath) {
-        Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $tempPath) {
+        Remove-Item -LiteralPath $tempPath -Force -ErrorAction SilentlyContinue
     }
 
     exit 1
