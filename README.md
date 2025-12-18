@@ -1,6 +1,6 @@
 # 🚀 VSBTek Unified App Manager
 
-Công cụ PowerShell mạnh mẽ giúp tự động hóa việc cài đặt, cập nhật và quản lý ứng dụng Windows thông qua Chocolatey. Hỗ trợ cài đặt hàng loạt, remote config và giao diện chọn ứng dụng trực quan.
+Công cụ PowerShell mạnh mẽ giúp tự động hóa việc cài đặt, cập nhật và quản lý ứng dụng Windows thông qua **Chocolatey** và **Winget** (Hybrid). Hỗ trợ cài đặt hàng loạt, remote config và giao diện chọn ứng dụng trực quan.
 
 ## 📋 Yêu cầu hệ thống
 
@@ -13,57 +13,21 @@ Công cụ PowerShell mạnh mẽ giúp tự động hóa việc cài đặt, c�
 
 Mở **PowerShell (Run as Administrator)** và chạy lệnh sau để bắt đầu ngay:
 
+### 🌐 1. Online (Khuyên dùng)
+
+Chạy lệnh sau trong **PowerShell (Admin)**:
+
 ```powershell
-# Cách 1: Cài đặt trực tiếp từ GitHub (Khuyên dùng)
-irm https://raw.githubusercontent.com/HenryBui21/VSBTek-Chocolatey-Installer/main/quick-install.ps1 | iex
+irm https://raw.githubusercontent.com/HenryBui21/VSBTek-Unified-App-Manager/main/quick-install.ps1 | iex
 ```
 
-## Cài đặt nhanh
+### 📂 2. Offline (Thủ công)
 
-### Từ Web (Khuyên dùng)
+Tải script về và chạy:
 
-**Cách 1: One-liner siêu ngắn (Nhanh nhất)** ⚡
 ```powershell
-# Từ GitHub (Hoạt động ngay)
-irm https://raw.githubusercontent.com/HenryBui21/VSBTek-Chocolatey-Installer/main/quick-install.ps1 | iex
-
-# Hoặc từ scripts.vsbtek.com (nếu đã cấu hình)
-irm https://scripts.vsbtek.com/quick-install.ps1 | iex
-```
-✅ **Khuyên dùng** - Lệnh ngắn gọn nhất, tự động tải và chạy interactive mode
-
-**Cách 2: Tải về và chạy (Linh hoạt nhất)**
-```powershell
-# Tải script về và chạy interactive mode
-irm https://scripts.vsbtek.com/install-apps.ps1 -OutFile install-apps.ps1
+irm https://raw.githubusercontent.com/HenryBui21/VSBTek-Chocolatey-Installer/main/install-apps.ps1 -OutFile install-apps.ps1
 .\install-apps.ps1
-
-# Hoặc chạy trực tiếp với preset
-irm https://scripts.vsbtek.com/install-apps.ps1 -OutFile install-apps.ps1
-.\install-apps.ps1 -Preset basic -Mode remote
-```
-
-**Cách 3: One-liner với temp folder**
-```powershell
-irm https://scripts.vsbtek.com/install-apps.ps1 -OutFile "$env:TEMP\install-apps.ps1"; & "$env:TEMP\install-apps.ps1"
-```
-
-### Từ Local
-
-```powershell
-# Interactive mode với menu
-.\install-apps.ps1
-
-# Cài đặt với preset
-.\install-apps.ps1 -Preset basic
-
-# Cài đặt với config file tùy chỉnh
-.\install-apps.ps1 -ConfigFile "my-apps.json"
-
-# Quản lý ứng dụng
-.\install-apps.ps1 -Action Update -Preset dev
-.\install-apps.ps1 -Action List -Preset gaming
-.\install-apps.ps1 -Action Upgrade
 ```
 
 ⚠️ **Lưu ý**: Script tự động yêu cầu quyền Administrator khi cần.
@@ -108,22 +72,14 @@ Gaming platform và tiện ích:
 
 **MỚI!** Không muốn cài cả preset? Chọn từng ứng dụng riêng lẻ!
 
-**2 chế độ lựa chọn:**
-
-1. **GUI Mode (Out-GridView)** - Khuyên dùng
-   - Cửa sổ đồ họa với checkboxes
-   - Search/filter apps theo tên
-   - Ctrl+Click để chọn nhiều apps
-   - Hoạt động trên Windows 10/11
-
-2. **Text Mode** - Fallback tự động
-   - Menu dạng text nếu GUI không available
-   - Chọn bằng số: `1,3,5` hoặc range `1-10`
-   - Type `all` để chọn tất cả
+Hệ thống sử dụng **Giao diện chọn thông minh (Smart GUI)**:
+*   ✅ **Checkbox Form**: Hiển thị cửa sổ với các ô tích chọn trực quan (Ưu tiên).
+*   ✅ **Auto-Fallback**: Tự động chuyển sang dạng Text Menu nếu chạy trên môi trường không hỗ trợ GUI (Windows Server Core, SSH...).
+*   ✅ **All-in-One**: Hiển thị tất cả ứng dụng từ mọi preset để bạn thoải mái lựa chọn.
 
 **Cách sử dụng:**
 ```powershell
-# Interactive mode - chọn option "5. Custom Selection"
+# Interactive mode - chọn option "Custom Selection" từ menu
 .\install-apps.ps1
 
 # Hoặc command-line trực tiếp
@@ -219,6 +175,7 @@ Format file JSON:
 
 ## Tính năng
 
+✅ **Hybrid Engine**: Kết hợp sức mạnh của Chocolatey và Winget (tự động fallback).
 ✅ **Tự động cài Chocolatey** nếu chưa có
 ✅ **Auto-elevation** - tự xin quyền Administrator
 ✅ **5 chế độ hoạt động**: Install, Update, Uninstall, List, Upgrade
@@ -226,6 +183,7 @@ Format file JSON:
 ✅ **Custom Selection** 🆕 - Tự chọn apps riêng lẻ (GUI hoặc text mode)
 ✅ **Remote execution** qua web với GitHub integration
 ✅ **Interactive menus** - dễ sử dụng không cần tham số
+✅ **Package Policy** - Quản lý ưu tiên nguồn cài đặt (Choco/Winget) và ghim phiên bản.
 ✅ **Package detection** - kiểm tra Windows Registry
 ✅ **Environment refresh** sau khi cài
 ✅ **Version pinning** và custom parameters
@@ -241,6 +199,7 @@ Format file JSON:
 | `-Preset` | Preset có sẵn | `basic`, `dev`, `community`, `gaming` |
 | `-Mode` | Nguồn config | `local` (mặc định), `remote` (GitHub) |
 | `-Force` | Bắt buộc cài đặt/gỡ bỏ | Switch flag |
+| `-UseWinget` | Ưu tiên sử dụng Winget (Hybrid mode) | Switch flag |
 | `-KeepWindowOpen` | Giữ cửa sổ mở sau khi chạy xong | Switch flag |
 
 ## Cấu trúc dự án
@@ -252,10 +211,9 @@ VSBTek-Chocolatey-Installer/
 ├── quick-install.ps1             # Wrapper script cho one-liner với SHA256 check
 ├── setup-dev.ps1                 # Quick development environment setup
 │
-├── basic-apps-config.json        # 18 ứng dụng cơ bản
-├── dev-tools-config.json         # 15 dev tools
-├── community-config.json         # 5 ứng dụng giao tiếp
-├── gaming-config.json            # 10 gaming apps
+├── *-config.json                 # Các file cấu hình preset (basic, dev, gaming...)
+├── package-policy.json           # Cấu hình ưu tiên nguồn và ghim phiên bản
+├── winget-map.json               # Mapping ID giữa Chocolatey và Winget
 │
 ├── docs/                         # Documentation
 │   └── AUTOMATION-README.md      # Hướng dẫn automation & hash verification
