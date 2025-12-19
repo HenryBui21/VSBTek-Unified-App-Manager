@@ -80,11 +80,8 @@ if ($missingModules -or $Mode -eq 'remote' -or $ForceUpdate) {
         foreach ($mod in $ModulesList) {
             $modLocalPath = Join-Path $ModulesPath $mod
             $url = "$GitHubRepo/scripts/modules/$mod"
-            # Always download in remote mode or if missing
-            if ($missingModules -or -not (Test-Path $modLocalPath)) {
-                # Write-Host "  Fetching: $mod" -ForegroundColor DarkGray
-                $WebClient.DownloadFile($url, $modLocalPath)
-            }
+            # The outer 'if' condition has already determined we need to download.
+            $WebClient.DownloadFile($url, $modLocalPath)
         }
     } catch {
         Write-Error "Failed to download required components. Please check your internet connection."

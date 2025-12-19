@@ -93,7 +93,7 @@ try {
     # Check for Winget support (Windows 10 1809+ / Build 17763+)
     $osVersion = [Environment]::OSVersion.Version
     $isWingetSupported = ($osVersion.Major -ge 10 -and $osVersion.Build -ge 17763)
-    $scriptArgs = @()
+    $scriptArgs = @("-Mode", "remote") # Always run in remote mode to force module updates
 
     if ($isWingetSupported) {
         Write-Host "OS supports Winget (Build $($osVersion.Build)). Enabling Winget mode." -ForegroundColor Cyan
