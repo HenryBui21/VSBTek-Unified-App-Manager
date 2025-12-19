@@ -200,11 +200,54 @@ function Set-ChocoPin {
 }
 
 function Install-Winget {
-    Write-Host "[INFO] Winget not found. Attempting to install..." -ForegroundColor Cyan
-    # Simplified for module - assuming same logic as original
-    # (Content omitted for brevity but should be the same as original script)
-    Write-Host "[WARNING] Auto-install Winget functionality requires full script context. Please install manually from Microsoft Store." -ForegroundColor Yellow
-    return $false
+    # This function checks for Winget. If not found, it attempts to install it.
+    # Returns $true if Winget is available after execution, $false otherwise.
+
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        # It's already here, no action needed.
+        return $true
+    }
+
+    # Check OS compatibility
+    $osVersion = [Environment]::OSVersion.Version
+    if ($osVersion.Major -lt 10 -or ($osVersion.Major -eq 10 -and $osVersion.Build -lt 17763)) {
+        Write-WarningMsg "Winget requires Windows 10 (build 17763) or newer. Your build: $($osVersion.Build)."
+        return $false
+    }
+
+    Write-Host "[INFO] Winget not found. Attempting to install from GitHub..." -ForegroundColor Cyan
+    $tempPath = Join-Path $env:TEMP "winget-install.msixbundle"
+    
+    try {
+        # Use GitHub API to find the latest release asset
+        $releaseApiUrl = "https://api.github.com/repos/microsoft/winget-cli/releases/latest"
+        Write-Host "  Querying latest release from GitHub..." -ForegroundColor Gray
+        $releaseInfo = Invoke-RestMethod -Uri $releaseApiUrl -UseBasicParsing -TimeoutSec 15
+        $downloadUrl = ($releaseInfo.assets | Where-Object { $_.name -like '*.msixbundle' }).browser_download_url
+
+        if (-not $downloadUrl) {
+            throw "Could not find .msixbundle in the latest Winget release assets."
+        }
+
+        Write-Host "  Downloading from: $downloadUrl" -ForegroundColor Gray
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $tempPath -UseBasicParsing -TimeoutSec 120
+
+        Write-Host "  Installing App Package..." -ForegroundColor Gray
+        Add-AppxPackage -Path $tempPath | Out-Null
+        
+        Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
+
+        if (Get-Command winget -ErrorAction SilentlyContinue) {
+            Write-Host "[OK] Winget installed successfully." -ForegroundColor Green
+            return $true
+        }
+        throw "Winget installation seemed to succeed, but the 'winget' command is not available."
+    } catch {
+        Write-ErrorMsg "Failed to automatically install Winget: $($_.Exception.Message)"
+        Write-WarningMsg "Please try installing Winget manually from the Microsoft Store (search for 'App Installer')."
+        if (Test-Path $tempPath) { Remove-Item $tempPath -Force -ErrorAction SilentlyContinue }
+        return $false
+    }
 }
 
 function Install-WingetPackage {
