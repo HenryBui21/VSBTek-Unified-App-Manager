@@ -14,7 +14,7 @@ function Initialize-Detection {
     # Load Winget Map
     try {
         $mapFile = "winget-map.json"
-        $localMapPath = Join-Path $RootPath $mapFile
+        $localMapPath = Join-Path $RootPath "config\$mapFile"
         
         if (Test-Path $localMapPath) {
             $jsonMap = Get-Content $localMapPath -Raw | ConvertFrom-Json

@@ -80,7 +80,12 @@ function Get-AvailablePresets {
     $presets = @()
     
     if ($Mode -eq 'local') {
-        $files = Get-ChildItem -Path $RootPath -Filter "*-config.json" -ErrorAction SilentlyContinue
+        $configDir = Join-Path $RootPath "config"
+        if (Test-Path $configDir) {
+            $files = Get-ChildItem -Path $configDir -Filter "*-config.json" -ErrorAction SilentlyContinue
+        } else {
+            $files = @()
+        }
         
         foreach ($file in $files) {
             $knownKey = $null
@@ -193,7 +198,7 @@ function Get-ConfigApplications {
             $configUrl = "$GitHubRepo/$configFileName"
             $applications = Get-WebConfig -ConfigUrl $configUrl
         } else {
-            $configPath = Join-Path $RootPath $configFileName
+            $configPath = Join-Path $RootPath "config\$configFileName"
             if (-not (Test-Path $configPath)) {
                 Write-Host "[WARNING] Local config not found, downloading from GitHub..." -ForegroundColor Yellow
                 $configUrl = "$GitHubRepo/$configFileName"
@@ -205,7 +210,11 @@ function Get-ConfigApplications {
     } elseif ($ConfigFile) {
         $configPath = $ConfigFile
         if (-not [System.IO.Path]::IsPathRooted($configPath)) {
-            $configPath = Join-Path $RootPath $ConfigFile
+            $configPath = Join-Path $RootPath "config\$ConfigFile"
+            if (-not (Test-Path $configPath)) {
+                # Fallback to root if not found in config dir (for backward compat or absolute paths)
+                $configPath = Join-Path $RootPath $ConfigFile
+            }
         }
         $applications = Get-ApplicationConfig -ConfigPath $configPath
     }
