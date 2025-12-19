@@ -94,6 +94,11 @@ if ($missingModules -or $Mode -eq 'remote') {
 # Import Modules
 foreach ($mod in $ModulesList) {
     try {
+        # Get module name from filename (e.g., Logger.psm1 -> Logger)
+        $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($mod)
+        # Forcefully remove any cached version of the module from the current session
+        Remove-Module $moduleName -ErrorAction SilentlyContinue
+        # Import the fresh version
         Import-Module (Join-Path $ModulesPath $mod) -Force -ErrorAction Stop
     } catch {
         Write-Warning "Failed to import module: $mod"
