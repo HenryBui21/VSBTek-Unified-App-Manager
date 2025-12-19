@@ -195,13 +195,13 @@ function Get-ConfigApplications {
         }
 
         if ($Mode -eq 'remote') {
-            $configUrl = "$GitHubRepo/$configFileName"
+            $configUrl = "$GitHubRepo/config/$configFileName"
             $applications = Get-WebConfig -ConfigUrl $configUrl
         } else {
             $configPath = Join-Path $RootPath "config\$configFileName"
             if (-not (Test-Path $configPath)) {
                 Write-Host "[WARNING] Local config not found, downloading from GitHub..." -ForegroundColor Yellow
-                $configUrl = "$GitHubRepo/$configFileName"
+                $configUrl = "$GitHubRepo/config/$configFileName"
                 $applications = Get-WebConfig -ConfigUrl $configUrl
             } else {
                 $applications = Get-ApplicationConfig -ConfigPath $configPath
@@ -241,12 +241,12 @@ function Get-AllAvailableApps {
         try {
             $apps = $null
             if ($Mode -eq 'remote') {
-                $configUrl = "$GitHubRepo/$configFileName"
+                $configUrl = "$GitHubRepo/config/$configFileName"
                 $apps = Get-WebConfig -ConfigUrl $configUrl
             } else {
-                $configPath = Join-Path $RootPath $configFileName
+                $configPath = Join-Path $RootPath "config\$configFileName"
                 if (-not (Test-Path $configPath) -and $Mode -eq 'local') {
-                    $configUrl = "$GitHubRepo/$configFileName"
+                    $configUrl = "$GitHubRepo/config/$configFileName"
                     $apps = Get-WebConfig -ConfigUrl $configUrl
                 } else {
                     $apps = Get-ApplicationConfig -ConfigPath $configPath
