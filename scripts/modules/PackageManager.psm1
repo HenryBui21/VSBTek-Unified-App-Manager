@@ -216,26 +216,39 @@ function Install-Winget {
     }
 
     Write-Host "[INFO] Winget not found. Attempting to install from GitHub..." -ForegroundColor Cyan
-    $tempPath = Join-Path $env:TEMP "winget-install.msixbundle"
+    $tempDir = Join-Path $env:TEMP "winget-install-temp"
+    if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir | Out-Null }
     
     try {
         # Use GitHub API to find the latest release asset
         $releaseApiUrl = "https://api.github.com/repos/microsoft/winget-cli/releases/latest"
         Write-Host "  Querying latest release from GitHub..." -ForegroundColor Gray
         $releaseInfo = Invoke-RestMethod -Uri $releaseApiUrl -UseBasicParsing -TimeoutSec 15
-        $downloadUrl = ($releaseInfo.assets | Where-Object { $_.name -like '*.msixbundle' }).browser_download_url
+        
+        $bundleAsset = $releaseInfo.assets | Where-Object { $_.name -like '*.msixbundle' }
+        $dependencyAsset = $releaseInfo.assets | Where-Object { $_.name -like '*VCLibs*.appx' }
 
-        if (-not $downloadUrl) {
+        if (-not $bundleAsset) {
             throw "Could not find .msixbundle in the latest Winget release assets."
         }
 
-        Write-Host "  Downloading from: $downloadUrl" -ForegroundColor Gray
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $tempPath -UseBasicParsing -TimeoutSec 120
+        # Download and install dependency if it exists
+        if ($dependencyAsset) {
+            $dependencyPath = Join-Path $tempDir $dependencyAsset.name
+            Write-Host "  Downloading dependency: $($dependencyAsset.name)" -ForegroundColor Gray
+            Invoke-WebRequest -Uri $dependencyAsset.browser_download_url -OutFile $dependencyPath -UseBasicParsing -TimeoutSec 120
+            
+            Write-Host "  Installing dependency..." -ForegroundColor Gray
+            Add-AppxPackage -Path $dependencyPath | Out-Null
+        }
 
-        Write-Host "  Installing App Package..." -ForegroundColor Gray
-        Add-AppxPackage -Path $tempPath | Out-Null
-        
-        Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
+        # Download and install main package
+        $bundlePath = Join-Path $tempDir $bundleAsset.name
+        Write-Host "  Downloading main package: $($bundleAsset.name)" -ForegroundColor Gray
+        Invoke-WebRequest -Uri $bundleAsset.browser_download_url -OutFile $bundlePath -UseBasicParsing -TimeoutSec 120
+
+        Write-Host "  Installing main package..." -ForegroundColor Gray
+        Add-AppxPackage -Path $bundlePath | Out-Null
 
         if (Get-Command winget -ErrorAction SilentlyContinue) {
             Write-Host "[OK] Winget installed successfully." -ForegroundColor Green
@@ -244,9 +257,12 @@ function Install-Winget {
         throw "Winget installation seemed to succeed, but the 'winget' command is not available."
     } catch {
         Write-ErrorMsg "Failed to automatically install Winget: $($_.Exception.Message)"
-        Write-WarningMsg "Please try installing Winget manually from the Microsoft Store (search for 'App Installer')."
-        if (Test-Path $tempPath) { Remove-Item $tempPath -Force -ErrorAction SilentlyContinue }
+        Write-WarningMsg "This can happen if a required dependency is missing or if there's a conflict with an existing 'App Installer' version."
+        Write-WarningMsg "Please try installing/updating 'App Installer' from the Microsoft Store first, then run this script again."
         return $false
+    } finally {
+        # Clean up downloaded files
+        if (Test-Path $tempDir) { Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue }
     }
 }
 
