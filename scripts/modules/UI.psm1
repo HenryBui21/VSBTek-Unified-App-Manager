@@ -337,19 +337,64 @@ function Show-PresetMenu {
 
 function Show-PolicyMenu {
     while ($true) {
+        # Assumes that Add-PackagePolicyRule and Remove-PackagePolicyRule exist in the Config module
         $policy = Get-PackagePolicy
-        Write-Host "`nCurrent Policies:" -ForegroundColor Yellow
-        Write-Host "  Pinned: $($policy.pinned -join ', ')"
+        Write-Host "`n========================================" -ForegroundColor Magenta
+        Write-Host "  Manage Package Policies" -ForegroundColor Magenta
+        Write-Host "========================================`n" -ForegroundColor Magenta
+
+        Write-Host "Current Policies:" -ForegroundColor Yellow
+        Write-Host "  Pinned Packages (won't be auto-updated by 'upgrade all'):" -ForegroundColor Gray
+        Write-Host "    $($policy.pinned -join ', ')" -ForegroundColor White
+        Write-Host "  Prefer Chocolatey For:" -ForegroundColor Gray
+        Write-Host "    $($policy.preferChoco -join ', ')" -ForegroundColor White
+        Write-Host "  Prefer Winget For:" -ForegroundColor Gray
+        Write-Host "    $($policy.preferWinget -join ', ')" -ForegroundColor White
+        Write-Host ""
         
         Write-Host "  1. Add 'Pin' rule"
         Write-Host "  2. Add 'Prefer Chocolatey' rule"
         Write-Host "  3. Add 'Prefer Winget' rule"
-        Write-Host "  4. Remove rule"
-        Write-Host "  5. Back"
+        Write-Host "  4. Remove a rule for a package"
+        Write-Host "  5. Back to Main Menu"
 
         $choice = Read-Host "Enter choice"
-        if ($choice -eq '5') { return }
-        # Simplified for brevity in this step, similar logic to original
+        switch ($choice) {
+            '1' {
+                $pkg = Read-Host "Enter package name to Pin (e.g. 'vscode')"
+                if (-not [string]::IsNullOrWhiteSpace($pkg)) {
+                    Add-PackagePolicyRule -Type 'pinned' -PackageName $pkg.ToLower().Trim()
+                    Write-Host "[OK] Added pin for '$pkg'" -ForegroundColor Green
+                }
+            }
+            '2' {
+                $pkg = Read-Host "Enter package name to prefer Chocolatey for (e.g. '7zip')"
+                if (-not [string]::IsNullOrWhiteSpace($pkg)) {
+                    Add-PackagePolicyRule -Type 'preferChoco' -PackageName $pkg.ToLower().Trim()
+                    Write-Host "[OK] Set preference for '$pkg' to Chocolatey" -ForegroundColor Green
+                }
+            }
+            '3' {
+                $pkg = Read-Host "Enter package name to prefer Winget for (e.g. 'powertoys')"
+                if (-not [string]::IsNullOrWhiteSpace($pkg)) {
+                    Add-PackagePolicyRule -Type 'preferWinget' -PackageName $pkg.ToLower().Trim()
+                    Write-Host "[OK] Set preference for '$pkg' to Winget" -ForegroundColor Green
+                }
+            }
+            '4' {
+                $pkg = Read-Host "Enter package name to remove from all policies"
+                if (-not [string]::IsNullOrWhiteSpace($pkg)) {
+                    Remove-PackagePolicyRule -PackageName $pkg.ToLower().Trim()
+                    Write-Host "[OK] Removed all rules for '$pkg'" -ForegroundColor Green
+                }
+            }
+            '5' { return }
+            default { Write-Warning "Invalid choice." }
+        }
+        # Pause to show result before looping
+        if ($choice -in '1','2','3','4') {
+             Read-Host "Press Enter to continue..." | Out-Null
+        }
     }
 }
 
