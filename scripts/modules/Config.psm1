@@ -32,34 +32,36 @@ function Get-PackagePolicy {
 
 function Add-PackagePolicyRule {
     param(
-        [string]$AppName,
+        [string]$PackageName,
         [string]$Type # 'pinned', 'preferChoco', 'preferWinget'
     )
-    $AppName = $AppName.ToLower()
+    $PackageName = $PackageName.ToLower()
     
     # Remove existing conflicts
-    $script:PackagePolicy.preferChoco = $script:PackagePolicy.preferChoco | Where-Object { $_ -ne $AppName }
-    $script:PackagePolicy.preferWinget = $script:PackagePolicy.preferWinget | Where-Object { $_ -ne $AppName }
+    # The @() wrapper is crucial to ensure the result is always an array,
+    # even if Where-Object returns a single scalar item.
+    $script:PackagePolicy.preferChoco = @($script:PackagePolicy.preferChoco | Where-Object { $_ -ne $PackageName })
+    $script:PackagePolicy.preferWinget = @($script:PackagePolicy.preferWinget | Where-Object { $_ -ne $PackageName })
 
     switch ($Type) {
         'pinned' {
-            if ($script:PackagePolicy.pinned -notcontains $AppName) { $script:PackagePolicy.pinned += $AppName }
+            if ($script:PackagePolicy.pinned -notcontains $PackageName) { $script:PackagePolicy.pinned += $PackageName }
         }
         'preferChoco' {
-            $script:PackagePolicy.preferChoco += $AppName
+            $script:PackagePolicy.preferChoco += $PackageName
         }
         'preferWinget' {
-            $script:PackagePolicy.preferWinget += $AppName
+            $script:PackagePolicy.preferWinget += $PackageName
         }
     }
 }
 
 function Remove-PackagePolicyRule {
-    param([string]$AppName)
-    $AppName = $AppName.ToLower()
-    $script:PackagePolicy.pinned = $script:PackagePolicy.pinned | Where-Object { $_ -ne $AppName }
-    $script:PackagePolicy.preferChoco = $script:PackagePolicy.preferChoco | Where-Object { $_ -ne $AppName }
-    $script:PackagePolicy.preferWinget = $script:PackagePolicy.preferWinget | Where-Object { $_ -ne $AppName }
+    param([string]$PackageName)
+    $PackageName = $PackageName.ToLower()
+    $script:PackagePolicy.pinned = @($script:PackagePolicy.pinned | Where-Object { $_ -ne $PackageName })
+    $script:PackagePolicy.preferChoco = @($script:PackagePolicy.preferChoco | Where-Object { $_ -ne $PackageName })
+    $script:PackagePolicy.preferWinget = @($script:PackagePolicy.preferWinget | Where-Object { $_ -ne $PackageName })
 }
 
 # Config State

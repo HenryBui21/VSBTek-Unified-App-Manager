@@ -2,137 +2,6 @@
 # UI Module
 # Depends on: Logger, Config, Detection
 
-function Show-CheckboxSelectionForm {
-    param([array]$Apps)
-
-    # Simple stub if WinForms not available or headless
-    if ($Host.UI.RawUI.BufferSize) { 
-        # Checking if we can actually show UI
-    }
-
-    try {
-        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
-        Add-Type -AssemblyName System.Drawing -ErrorAction Stop
-    } catch { return $null }
-
-    $form = New-Object System.Windows.Forms.Form
-    $form.Text = "Select Applications to Install"
-    $form.Size = New-Object System.Drawing.Size(800, 600)
-    $form.StartPosition = "CenterScreen"
-    $form.FormBorderStyle = 'FixedDialog'
-    $form.MaximizeBox = $false
-
-    $label = New-Object System.Windows.Forms.Label
-    $label.Location = New-Object System.Drawing.Point(10, 10)
-    $label.Size = New-Object System.Drawing.Size(760, 20)
-    $label.Text = "Check the applications you want to install:"
-    $form.Controls.Add($label)
-
-    $checkedListBox = New-Object System.Windows.Forms.CheckedListBox
-    $checkedListBox.Location = New-Object System.Drawing.Point(10, 35)
-    $checkedListBox.Size = New-Object System.Drawing.Size(760, 450)
-    $checkedListBox.CheckOnClick = $true
-
-    $groupedApps = $Apps | Group-Object -Property Category | Sort-Object Name
-    $appLookup = @{}
-    $index = 0
-
-    foreach ($group in $groupedApps) {
-        $headerIndex = $checkedListBox.Items.Add("=== $($group.Name.ToUpper()) ===")
-        $checkedListBox.SetItemCheckState($headerIndex, 'Indeterminate')
-
-        foreach ($app in ($group.Group | Sort-Object Name)) {
-            $displayText = "    $($app.Name)"
-            if ($app.Version) { $displayText += " (v$($app.Version))" }
-            $itemIndex = $checkedListBox.Items.Add($displayText)
-            $appLookup[$itemIndex] = $app
-            $index++
-        }
-    }
-    $form.Controls.Add($checkedListBox)
-
-    $buttonPanel = New-Object System.Windows.Forms.Panel
-    $buttonPanel.Location = New-Object System.Drawing.Point(10, 495)
-    $buttonPanel.Size = New-Object System.Drawing.Size(760, 50)
-
-    $selectAllButton = New-Object System.Windows.Forms.Button
-    $selectAllButton.Location = New-Object System.Drawing.Point(0, 10)
-    $selectAllButton.Text = "Select All"
-    $selectAllButton.Add_Click({
-        for ($i = 0; $i -lt $checkedListBox.Items.Count; $i++) {
-            if ($appLookup.ContainsKey($i)) { $checkedListBox.SetItemChecked($i, $true) }
-        }
-    })
-    $buttonPanel.Controls.Add($selectAllButton)
-
-    $okButton = New-Object System.Windows.Forms.Button
-    $okButton.Location = New-Object System.Drawing.Point(550, 10)
-    $okButton.Text = "OK"
-    $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
-    $buttonPanel.Controls.Add($okButton)
-
-    $form.Controls.Add($buttonPanel)
-    $form.AcceptButton = $okButton
-    
-    $result = $form.ShowDialog()
-
-    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
-        $selectedApps = @()
-        foreach ($i in $checkedListBox.CheckedIndices) {
-            if ($appLookup.ContainsKey($i)) {
-                $app = $appLookup[$i]
-                $selectedApps += [PSCustomObject]@{ name = $app.Name; version = $app.Version; params = $app.Params }
-            }
-        }
-        return $selectedApps
-    }
-    return $null
-}
-
-
-
-function Show-TextBasedSelection {
-    param([array]$Apps)
-    
-    Write-Host "`n========================================" -ForegroundColor Yellow
-    Write-Host "  Text-Based Application Selection" -ForegroundColor Yellow
-    Write-Host "========================================`n" -ForegroundColor Yellow
-
-    $groupedApps = $Apps | Group-Object -Property Category
-    $index = 1
-    $appIndexMap = @{}
-
-    foreach ($group in $groupedApps) {
-        Write-Host "`n  $($group.Name):" -ForegroundColor Cyan
-        foreach ($app in $group.Group) {
-            Write-Host "    [$index] $($app.Name)"
-            $appIndexMap[$index] = $app
-            $index++
-        }
-    }
-
-    $selection = Read-Host "Enter numbers (e.g. 1,3,5-7) or 'all'"
-    if ($selection -eq 'cancel') { return $null }
-    
-    $selectedApps = @()
-    if ($selection -eq 'all') {
-        foreach ($app in $Apps) { $selectedApps += [PSCustomObject]@{ name=$app.Name; version=$app.Version; params=$app.Params } }
-    } else {
-        $parts = $selection -split ',' | ForEach-Object { $_.Trim() }
-        foreach ($part in $parts) {
-            if ($part -match '^(\d+)-(\d+)$') {
-                for ($i = [int]$matches[1]; $i -le [int]$matches[2]; $i++) {
-                    if ($appIndexMap.ContainsKey($i)) { $selectedApps += [PSCustomObject]@{ name=$appIndexMap[$i].Name; version=$appIndexMap[$i].Version; params=$appIndexMap[$i].Params } }
-                }
-            } elseif ($part -match '^\d+$') {
-                $num = [int]$part
-                if ($appIndexMap.ContainsKey($num)) { $selectedApps += [PSCustomObject]@{ name=$appIndexMap[$num].Name; version=$appIndexMap[$num].Version; params=$appIndexMap[$num].Params } }
-            }
-        }
-    }
-    return $selectedApps
-}
-
 function Show-CustomSelectionMenu {
     param([string]$Mode = 'local', [string]$RootPath, [string]$GitHubRepo)
 
@@ -141,38 +10,58 @@ function Show-CustomSelectionMenu {
     Write-Host "========================================`n" -ForegroundColor Cyan
 
     $allApps = Get-AllAvailableApps -Mode $Mode -RootPath $RootPath -GitHubRepo $GitHubRepo
-    if (-not $allApps) { return $null }
+    if (-not $allApps) { return @() }
 
-    # Smart Detection Logic
-    $canShowGui = $false
-    
-    # Check 1: Is the environment interactive?
-    if ([Environment]::UserInteractive) {
-        # Check 2: Can we load Windows Forms?
-        try {
-            Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
-            $canShowGui = $true
-        } catch {
-            Write-Warning "GUI libraries not available. Falling back to text mode."
+    $useGridView = Get-Command Out-GridView -ErrorAction SilentlyContinue
+
+    if ($useGridView) {
+        $selectedApps = $allApps | 
+            Select-Object Name, Category, Version, Params | 
+            Sort-Object Category, Name | 
+            Out-GridView -Title "Select Applications (use Ctrl+Click to select multiple)" -OutputMode Multiple
+        
+        return $selectedApps
+    } else {
+        # Text-based fallback
+        Write-Host "`n  Text-Based Application Selection" -ForegroundColor Yellow
+        Write-Host "----------------------------------------`n" -ForegroundColor Yellow
+
+        $groupedApps = $allApps | Group-Object -Property Category | Sort-Object Name
+        $index = 1
+        $appIndexMap = @{}
+
+        foreach ($group in $groupedApps) {
+            Write-Host "`n  $($group.Name):" -ForegroundColor Cyan
+            foreach ($app in ($group.Group | Sort-Object Name)) {
+                $displayText = "    [$index] $($app.Name)"
+                if ($app.Version) { $displayText += " (v$($app.Version))" }
+                Write-Host $displayText
+                $appIndexMap[$index] = $app
+                $index++
+            }
         }
-    }
 
-    if ($canShowGui) {
-        # Try to show the GUI
-        try {
-            $selectedApps = Show-CheckboxSelectionForm -Apps $allApps
-            
-            # Logic: If Show-CheckboxSelectionForm returns $null, it means the user 
-            # clicked Cancel or closed the window. We RESPECT that choice and do NOT fallback.
-            return $selectedApps
-        } catch {
-            # Only fallback if the GUI function actually crashed
-            Write-Warning "GUI encountered an error. Falling back to text mode."
+        $selection = Read-Host "`nEnter numbers (e.g. 1,3,5-7), 'all', or 'cancel'"
+        if ($selection -eq 'cancel' -or [string]::IsNullOrWhiteSpace($selection)) { return @() }
+        
+        $selectedApps = @()
+        if ($selection -eq 'all') {
+            $selectedApps = $allApps
+        } else {
+            $parts = $selection -split ',' | ForEach-Object { $_.Trim() }
+            foreach ($part in $parts) {
+                if ($part -match '^(\d+)-(\d+)$') {
+                    for ($i = [int]$matches[1]; $i -le [int]$matches[2]; $i++) {
+                        if ($appIndexMap.ContainsKey($i)) { $selectedApps += $appIndexMap[$i] }
+                    }
+                } elseif ($part -match '^\d+$') {
+                    $num = [int]$part
+                    if ($appIndexMap.ContainsKey($num)) { $selectedApps += $appIndexMap[$num] }
+                }
+            }
         }
+        return $selectedApps
     }
-
-    # Fallback to Text ONLY if GUI is unavailable or crashed
-    return Show-TextBasedSelection -Apps $allApps
 }
 
 function Show-InstalledPackages {
@@ -283,6 +172,8 @@ function Show-InstalledPackages {
 }
 
 function Show-MainMenu {
+    param([string]$RootPath, [string]$GitHubRepo)
+
     while ($true) {
         Write-Host "`n========================================" -ForegroundColor Cyan
         Write-Host "  VSBTek Unified App Manager" -ForegroundColor Cyan
@@ -302,7 +193,7 @@ function Show-MainMenu {
             '3' { return 'Uninstall' }
             '4' { return 'List' }
             '5' { return 'Upgrade' }
-            '6' { Show-PolicyMenu }
+            '6' { Show-PolicyMenu -RootPath $RootPath -GitHubRepo $GitHubRepo }
             '7' { exit 0 }
         }
     }
@@ -336,6 +227,10 @@ function Show-PresetMenu {
 }
 
 function Show-PolicyMenu {
+    param([string]$RootPath, [string]$GitHubRepo)
+
+    $useGridView = Get-Command Out-GridView -ErrorAction SilentlyContinue
+
     while ($true) {
         # Assumes that Add-PackagePolicyRule and Remove-PackagePolicyRule exist in the Config module
         $policy = Get-PackagePolicy
@@ -344,12 +239,30 @@ function Show-PolicyMenu {
         Write-Host "========================================`n" -ForegroundColor Magenta
 
         Write-Host "Current Policies:" -ForegroundColor Yellow
+
         Write-Host "  Pinned Packages (won't be auto-updated by 'upgrade all'):" -ForegroundColor Gray
-        Write-Host "    $($policy.pinned -join ', ')" -ForegroundColor White
+        $filteredPinned = $policy.pinned | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        if ($filteredPinned.Count -gt 0) {
+            $filteredPinned | ForEach-Object { Write-Host "    - $_" -ForegroundColor White }
+        } else {
+            Write-Host "    (None)" -ForegroundColor White
+        }
+
         Write-Host "  Prefer Chocolatey For:" -ForegroundColor Gray
-        Write-Host "    $($policy.preferChoco -join ', ')" -ForegroundColor White
+        $filteredChoco = $policy.preferChoco | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        if ($filteredChoco.Count -gt 0) {
+            $filteredChoco | ForEach-Object { Write-Host "    - $_" -ForegroundColor White }
+        } else {
+            Write-Host "    (None)" -ForegroundColor White
+        }
+
         Write-Host "  Prefer Winget For:" -ForegroundColor Gray
-        Write-Host "    $($policy.preferWinget -join ', ')" -ForegroundColor White
+        $filteredWinget = $policy.preferWinget | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        if ($filteredWinget.Count -gt 0) {
+            $filteredWinget | ForEach-Object { Write-Host "    - $_" -ForegroundColor White }
+        } else {
+            Write-Host "    (None)" -ForegroundColor White
+        }
         Write-Host ""
         
         Write-Host "  1. Add 'Pin' rule"
@@ -361,42 +274,132 @@ function Show-PolicyMenu {
         $choice = Read-Host "Enter choice"
         switch ($choice) {
             '1' {
-                $pkg = Read-Host "Enter package name to Pin (e.g. 'vscode')"
-                if (-not [string]::IsNullOrWhiteSpace($pkg)) {
-                    Add-PackagePolicyRule -Type 'pinned' -PackageName $pkg.ToLower().Trim()
-                    Write-Host "[OK] Added pin for '$pkg'" -ForegroundColor Green
+                $pkgs = @()
+                if ($useGridView) {
+                    Write-Host "Loading available applications for selection..." -ForegroundColor Gray
+                    $allApps = Get-AllAvailableApps -Mode 'local' -RootPath $RootPath -GitHubRepo $GitHubRepo
+                    if ($allApps) {
+                        $selectedApps = $allApps | Select-Object Name, Category, Version | Sort-Object Category, Name | Out-GridView -Title "Select applications to Pin (use Ctrl+Click to select multiple)" -OutputMode Multiple
+                        if ($selectedApps) { $pkgs = $selectedApps.Name }
+                    } else { Write-Warning "Could not load application list." }
+                } else {
+                    $input = Read-Host "Enter package names to Pin, separated by commas (e.g. 'vscode,git')"
+                    if (-not [string]::IsNullOrWhiteSpace($input)) {
+                        $pkgs = $input.Split(',') | ForEach-Object { $_.Trim() }
+                    }
+                }
+
+                if ($pkgs.Count -gt 0) {
+                    foreach ($pkg in $pkgs) {
+                        if ([string]::IsNullOrWhiteSpace($pkg)) { continue }
+                        $pkgName = $pkg.ToLower().Trim()
+                        Add-PackagePolicyRule -Type 'pinned' -PackageName $pkgName
+                        Write-Host "[OK] Pin rule added for '$pkgName'." -ForegroundColor Green
+
+                        Write-Host "  Checking if package is installed to apply pin now..." -ForegroundColor Gray
+                        $isChoco = Test-PackageInstalled -PackageName $pkgName -ChocoOnly
+                        $isWinget = $false
+                        $wingetId = Resolve-WingetId -Name $pkgName
+                        $wingetList = Get-WingetListCache
+                        if ($wingetId -and $wingetList) {
+                            $pattern = '\s' + [regex]::Escape($wingetId) + '\s'
+                            if ($wingetList -match $pattern) { $isWinget = $true }
+                        }
+
+                        if ($isChoco) { Set-ChocoPin -PackageName $pkgName }
+                        elseif ($isWinget) { Set-WingetPin -PackageName $pkgName }
+                        else { Write-Host "  '$pkgName' is not currently managed by Choco/Winget. Pin will be applied on next install." -ForegroundColor Gray }
+                    }
                 }
             }
             '2' {
-                $pkg = Read-Host "Enter package name to prefer Chocolatey for (e.g. '7zip')"
-                if (-not [string]::IsNullOrWhiteSpace($pkg)) {
-                    Add-PackagePolicyRule -Type 'preferChoco' -PackageName $pkg.ToLower().Trim()
-                    Write-Host "[OK] Set preference for '$pkg' to Chocolatey" -ForegroundColor Green
+                $pkgs = @()
+                if ($useGridView) {
+                    Write-Host "Loading available applications for selection..." -ForegroundColor Gray
+                    $allApps = Get-AllAvailableApps -Mode 'local' -RootPath $RootPath -GitHubRepo $GitHubRepo
+                    if ($allApps) {
+                        $selectedApps = $allApps | Select-Object Name, Category, Version | Sort-Object Category, Name | Out-GridView -Title "Select applications to prefer Chocolatey for (use Ctrl+Click)" -OutputMode Multiple
+                        if ($selectedApps) { $pkgs = $selectedApps.Name }
+                    } else { Write-Warning "Could not load application list." }
+                } else {
+                    $input = Read-Host "Enter package names to prefer Chocolatey for, separated by commas"
+                    if (-not [string]::IsNullOrWhiteSpace($input)) {
+                        $pkgs = $input.Split(',') | ForEach-Object { $_.Trim() }
+                    }
+                }
+
+                if ($pkgs.Count -gt 0) {
+                    foreach ($pkg in $pkgs) {
+                        if ([string]::IsNullOrWhiteSpace($pkg)) { continue }
+                        Add-PackagePolicyRule -Type 'preferChoco' -PackageName $pkg.ToLower().Trim()
+                        Write-Host "[OK] Set preference for '$pkg' to Chocolatey" -ForegroundColor Green
+                    }
                 }
             }
             '3' {
-                $pkg = Read-Host "Enter package name to prefer Winget for (e.g. 'powertoys')"
-                if (-not [string]::IsNullOrWhiteSpace($pkg)) {
-                    Add-PackagePolicyRule -Type 'preferWinget' -PackageName $pkg.ToLower().Trim()
-                    Write-Host "[OK] Set preference for '$pkg' to Winget" -ForegroundColor Green
+                $pkgs = @()
+                if ($useGridView) {
+                    Write-Host "Loading available applications for selection..." -ForegroundColor Gray
+                    $allApps = Get-AllAvailableApps -Mode 'local' -RootPath $RootPath -GitHubRepo $GitHubRepo
+                    if ($allApps) {
+                        $selectedApps = $allApps | Select-Object Name, Category, Version | Sort-Object Category, Name | Out-GridView -Title "Select applications to prefer Winget for (use Ctrl+Click)" -OutputMode Multiple
+                        if ($selectedApps) { $pkgs = $selectedApps.Name }
+                    } else { Write-Warning "Could not load application list." }
+                } else {
+                    $input = Read-Host "Enter package names to prefer Winget for, separated by commas"
+                    if (-not [string]::IsNullOrWhiteSpace($input)) {
+                        $pkgs = $input.Split(',') | ForEach-Object { $_.Trim() }
+                    }
+                }
+
+                if ($pkgs.Count -gt 0) {
+                    foreach ($pkg in $pkgs) {
+                        if ([string]::IsNullOrWhiteSpace($pkg)) { continue }
+                        Add-PackagePolicyRule -Type 'preferWinget' -PackageName $pkg.ToLower().Trim()
+                        Write-Host "[OK] Set preference for '$pkg' to Winget" -ForegroundColor Green
+                    }
                 }
             }
             '4' {
-                $pkg = Read-Host "Enter package name to remove from all policies"
-                if (-not [string]::IsNullOrWhiteSpace($pkg)) {
-                    Remove-PackagePolicyRule -PackageName $pkg.ToLower().Trim()
-                    Write-Host "[OK] Removed all rules for '$pkg'" -ForegroundColor Green
+                $pkgs = @()
+                if ($useGridView) {
+                    $policy = Get-PackagePolicy
+                    $ruledPackages = ($policy.pinned + $policy.preferChoco + $policy.preferWinget) | Select-Object -Unique | Sort-Object
+                    if ($ruledPackages.Count -gt 0) {
+                        $packageObjects = $ruledPackages | ForEach-Object { [PSCustomObject]@{ PackageName = $_ } }
+                        $selectedPkgs = $packageObjects | Out-GridView -Title "Select packages to remove policies from (use Ctrl+Click)" -OutputMode Multiple
+                        if ($selectedPkgs) { $pkgs = $selectedPkgs.PackageName }
+                    } else {
+                        Write-Host "[INFO] No packages have policies to remove." -ForegroundColor Cyan
+                    }
+                } else {
+                    $input = Read-Host "Enter package names to remove from all policies, separated by commas"
+                    if (-not [string]::IsNullOrWhiteSpace($input)) {
+                        $pkgs = $input.Split(',') | ForEach-Object { $_.Trim() }
+                    }
+                }
+
+                if ($pkgs.Count -gt 0) {
+                    foreach ($pkg in $pkgs) {
+                        if ([string]::IsNullOrWhiteSpace($pkg)) { continue }
+                        Remove-PackagePolicyRule -PackageName $pkg.ToLower().Trim()
+                        Write-Host "[OK] Removed all rules for '$pkg'" -ForegroundColor Green
+                    }
                 }
             }
             '5' { return }
             default { Write-Warning "Invalid choice." }
         }
+
         # Pause to show result before looping
         if ($choice -in '1','2','3','4') {
+             # Save the in-memory policy changes to the JSON file on disk.
+             Save-PackagePolicy -RootPath $RootPath
              Read-Host "Press Enter to continue..." | Out-Null
         }
     }
 }
+
 
 function Show-ContinuePrompt {
     Write-Host "`n  1. Return to Main Menu"

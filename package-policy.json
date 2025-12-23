@@ -1,5 +1,5 @@
-﻿{
-    "preferChoco":  null,
-    "pinned":  null,
-    "preferWinget":  null
+{
+  "pinned": [],
+  "preferWinget": [],
+  "preferChoco": []
 }

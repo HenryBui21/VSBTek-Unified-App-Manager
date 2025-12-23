@@ -194,9 +194,20 @@ function Uninstall-ChocoPackage {
 function Set-ChocoPin {
     param([string]$PackageName)
     try {
-        $null = & choco pin add -n $PackageName -y 2>&1
-        if ($LASTEXITCODE -eq 0) { Write-Host "[OK] $PackageName pinned successfully" -ForegroundColor Green }
-    } catch {}
+        Write-Host "  Attempting to pin '$PackageName' with Chocolatey..." -ForegroundColor Gray
+        $output = & choco pin add -n $PackageName -y 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "[OK] '$PackageName' pinned successfully via Chocolatey." -ForegroundColor Green
+            return $true
+        } else {
+            Write-WarningMsg "Failed to pin '$PackageName' with Chocolatey (Exit code: $LASTEXITCODE)."
+            $output | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+            return $false
+        }
+    } catch {
+        Write-ErrorMsg "An error occurred while trying to pin '$PackageName' with Chocolatey: $($_.Exception.Message)"
+        return $false
+    }
 }
 
 function Install-Winget {
@@ -314,10 +325,25 @@ function Uninstall-WingetPackage {
 function Set-WingetPin {
     param([string]$PackageName)
     $target = Resolve-WingetId -Name $PackageName
+    if (-not $target) {
+        Write-WarningMsg "Could not resolve Winget ID for '$PackageName'. Cannot pin."
+        return $false
+    }
     try {
+        Write-Host "  Attempting to pin '$PackageName' (ID: $target) with Winget..." -ForegroundColor Gray
         $process = Start-Process -FilePath "winget" -ArgumentList "pin", "add", "--id", $target, "--blocking" -Wait -PassThru -NoNewWindow
-        if ($process.ExitCode -eq 0) { Write-Host "[OK] $PackageName pinned successfully" -ForegroundColor Green }
-    } catch {}
+        if ($process.ExitCode -eq 0) {
+            Write-Host "[OK] '$PackageName' pinned successfully via Winget." -ForegroundColor Green
+            return $true
+        } else {
+            Write-WarningMsg "Failed to pin '$PackageName' with Winget (Exit code: $($process.ExitCode))."
+            Write-WarningMsg "  Run 'winget pin add --id $target' manually in a terminal to see the full error."
+            return $false
+        }
+    } catch {
+        Write-ErrorMsg "An error occurred while trying to pin '$PackageName' with Winget: $($_.Exception.Message)"
+        return $false
+    }
 }
 
 function Get-PreferredSource {
@@ -350,12 +376,40 @@ function Invoke-UpgradeAll {
     Write-Host "  System-Wide Upgrade (Hybrid)" -ForegroundColor Magenta
     Write-Host "========================================`n" -ForegroundColor Magenta
 
+    # Load package policy to respect pinned packages
+    $policy = Get-PackagePolicy
+    $pinnedPackages = $policy.pinned
+
     Write-Host "[INFO] Phase 1/2: Upgrading Chocolatey packages..." -ForegroundColor Cyan
-    try { $null = & choco upgrade all -y --no-progress 2>&1 } catch {}
+    $chocoArgs = @('upgrade', 'all', '-y', '--no-progress')
+    if ($pinnedPackages.Count -gt 0) {
+        $chocoPinned = $pinnedPackages -join ','
+        $chocoArgs += "--except=$($chocoPinned)"
+        Write-Host "  Excluding pinned packages: $chocoPinned" -ForegroundColor Gray
+    }
+    try {
+        $null = & choco @chocoArgs 2>&1
+    } catch {}
 
     Write-Host "`n[INFO] Phase 2/2: Upgrading Winget packages..." -ForegroundColor Cyan
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         $wingetArgs = @('upgrade', '--all', '--include-unknown', '--accept-package-agreements', '--accept-source-agreements')
+
+        if ($pinnedPackages.Count -gt 0) {
+            $excludedIds = @()
+            foreach ($pkgName in $pinnedPackages) {
+                # Resolve choco name to winget ID. Assumes Resolve-WingetId is available.
+                $wingetId = Resolve-WingetId -Name $pkgName
+                if ($wingetId) {
+                    $wingetArgs += @('--exclude', $wingetId)
+                    $excludedIds += $wingetId
+                }
+            }
+            if ($excludedIds.Count -gt 0) {
+                Write-Host "  Excluding pinned packages (Winget IDs): $($excludedIds -join ', ')" -ForegroundColor Gray
+            }
+        }
+
         Start-Process -FilePath "winget" -ArgumentList $wingetArgs -Wait -NoNewWindow
     }
 }

@@ -170,7 +170,7 @@ function Invoke-MainWorkflow {
 
     $selectedAction = $InitialAction
     if (-not $selectedAction) {
-        $selectedAction = Show-MainMenu
+        $selectedAction = Show-MainMenu -RootPath $AppRoot -GitHubRepo $GitHubRepo
     }
 
     Write-Host ""
