@@ -286,40 +286,112 @@ function Install-WingetPackage {
     )
     Write-Host "[INFO] Installing $PackageName via Winget..." -ForegroundColor Cyan
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { return $false }
-
+ 
     $target = Resolve-WingetId -Name $PackageName
+    if (-not $target) {
+        Write-Host "[ERROR] Could not resolve Winget ID for '$PackageName'. Cannot install." -ForegroundColor Red
+        return $false
+    }
+
     try {
         $wingetArgs = @('install', '--id', $target, '--exact', '--accept-package-agreements', '--accept-source-agreements')
         if ($Version) { $wingetArgs += '--version'; $wingetArgs += $Version }
         if ($ForceInstall) { $wingetArgs += '--force' }
         if ($Params.Count -gt 0) { $wingetArgs += '--override'; $wingetArgs += ($Params -join ' ') }
-
-        $process = Start-Process -FilePath "winget" -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
-        if ($process.ExitCode -eq 0) {
+ 
+        # Capture all output streams to check for specific errors
+        $output = & winget @wingetArgs 2>&1
+        
+        if ($LASTEXITCODE -eq 0) {
             Write-Host "[OK] $PackageName installed successfully via Winget" -ForegroundColor Green
             return $true
         } else {
-            Write-Host "[ERROR] Winget install failed (Code: $($process.ExitCode))" -ForegroundColor Red
+            # Check for specific certificate error
+            if ($output -join ' ' -match '0x8a15005e') {
+                Write-Host "[ERROR] Winget install failed for $PackageName with a certificate error (0x8a15005e)." -ForegroundColor Red
+                Write-Host "  This is often caused by a network proxy/firewall or an outdated Winget client." -ForegroundColor Yellow
+                Write-Host "  Try updating 'App Installer' from the Microsoft Store or running 'winget source reset --force'." -ForegroundColor Yellow
+            } else {
+                Write-Host "[ERROR] Winget install failed for $PackageName (Code: $LASTEXITCODE)" -ForegroundColor Red
+            }
             return $false
         }
-    } catch { return $false }
+    } catch {
+        Write-Host "[ERROR] An unexpected script error occurred while trying to install $PackageName via Winget: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
+    }
 }
 
 function Update-WingetPackage {
     param([string]$PackageName, [string]$Version = $null)
+    Write-Host "[INFO] Updating $PackageName via Winget..." -ForegroundColor Cyan
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { return $false }
+
     $target = Resolve-WingetId -Name $PackageName
-    $wingetArgs = @('upgrade', '--id', $target, '--exact', '--accept-package-agreements', '--accept-source-agreements')
-    if ($Version) { $wingetArgs += '--version'; $wingetArgs += $Version }
-    $process = Start-Process -FilePath "winget" -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
-    return ($process.ExitCode -eq 0)
+    if (-not $target) {
+        Write-Host "[ERROR] Could not resolve Winget ID for '$PackageName'. Cannot update." -ForegroundColor Red
+        return $false
+    }
+
+    try {
+        $wingetArgs = @('upgrade', '--id', $target, '--exact', '--accept-package-agreements', '--accept-source-agreements')
+        if ($Version) { $wingetArgs += '--version'; $wingetArgs += $Version }
+        
+        $output = & winget @wingetArgs 2>&1
+
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "[OK] $PackageName updated successfully via Winget" -ForegroundColor Green
+            return $true
+        } else {
+            if ($output -join ' ' -match '0x8a15005e') {
+                Write-Host "[ERROR] Winget update failed for $PackageName with a certificate error (0x8a15005e)." -ForegroundColor Red
+                Write-Host "  This is often caused by a network proxy/firewall or an outdated Winget client." -ForegroundColor Yellow
+            } else {
+                # Winget upgrade returns a non-zero exit code if no update is available (0x8A15000C)
+                if ($LASTEXITCODE -eq -1978316788) {
+                    Write-Host "[INFO] $PackageName is already at the latest version available via Winget." -ForegroundColor Cyan
+                    return $true
+                }
+                Write-Host "[ERROR] Winget update failed for $PackageName (Code: $LASTEXITCODE)" -ForegroundColor Red
+            }
+            return $false
+        }
+    } catch {
+        Write-Host "[ERROR] An unexpected script error occurred while trying to update $PackageName via Winget: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
+    }
 }
 
 function Uninstall-WingetPackage {
     param([string]$PackageName)
+    Write-Host "[INFO] Uninstalling $PackageName via Winget..." -ForegroundColor Cyan
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { return $false }
+
     $target = Resolve-WingetId -Name $PackageName
-    $wingetArgs = @('uninstall', '--id', $target, '--exact')
-    $process = Start-Process -FilePath "winget" -ArgumentList $wingetArgs -Wait -PassThru -NoNewWindow
-    return ($process.ExitCode -eq 0)
+    if (-not $target) {
+        Write-Host "[ERROR] Could not resolve Winget ID for '$PackageName'. Cannot uninstall." -ForegroundColor Red
+        return $false
+    }
+
+    try {
+        $wingetArgs = @('uninstall', '--id', $target, '--exact', '--accept-source-agreements')
+        $output = & winget @wingetArgs 2>&1
+
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "[OK] $PackageName uninstalled successfully via Winget" -ForegroundColor Green
+            return $true
+        } else {
+            if ($output -join ' ' -match '0x8a15005e') {
+                Write-Host "[ERROR] Winget uninstall failed for $PackageName with a certificate error (0x8a15005e)." -ForegroundColor Red
+            } else {
+                Write-Host "[ERROR] Winget uninstall failed for $PackageName (Code: $LASTEXITCODE)" -ForegroundColor Red
+            }
+            return $false
+        }
+    } catch {
+        Write-Host "[ERROR] An unexpected script error occurred while trying to uninstall $PackageName via Winget: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
+    }
 }
 
 function Set-WingetPin {
@@ -331,13 +403,13 @@ function Set-WingetPin {
     }
     try {
         Write-Host "  Attempting to pin '$PackageName' (ID: $target) with Winget..." -ForegroundColor Gray
-        $process = Start-Process -FilePath "winget" -ArgumentList "pin", "add", "--id", $target, "--blocking" -Wait -PassThru -NoNewWindow
-        if ($process.ExitCode -eq 0) {
+        $output = & winget pin add --id $target --blocking 2>&1
+        if ($LASTEXITCODE -eq 0) {
             Write-Host "[OK] '$PackageName' pinned successfully via Winget." -ForegroundColor Green
             return $true
         } else {
-            Write-WarningMsg "Failed to pin '$PackageName' with Winget (Exit code: $($process.ExitCode))."
-            Write-WarningMsg "  Run 'winget pin add --id $target' manually in a terminal to see the full error."
+            Write-WarningMsg "Failed to pin '$PackageName' with Winget (Exit code: $LASTEXITCODE)."
+            $output | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
             return $false
         }
     } catch {

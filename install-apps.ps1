@@ -212,21 +212,36 @@ function Invoke-MainWorkflow {
                 $appVer = if ($app.version) { $app.version } else { $app.Version }
                 $appParams = if ($app.params) { $app.params } else { $app.Params }
                 
-                $source = Get-PreferredSource -AppName $appName -UseWinget $UseWinget
-                
+                $preferredSource = Get-PreferredSource -AppName $appName -UseWinget $UseWinget
+                $actualSource = $null
                 $success = $false
-                if ($source -eq 'Winget') {
-                    $success = Install-WingetPackage -PackageName $appName -Version $appVer -Params $appParams -ForceInstall $ForceFlag
-                    if (-not $success) { $success = Install-ChocoPackage -PackageName $appName -Version $appVer -Params $appParams -ForceInstall $ForceFlag }
-                } else {
-                    $success = Install-ChocoPackage -PackageName $appName -Version $appVer -Params $appParams -ForceInstall $ForceFlag
-                    if (-not $success -and $UseWinget) { $success = Install-WingetPackage -PackageName $appName -Version $appVer -Params $appParams -ForceInstall $ForceFlag }
+                
+                if ($preferredSource -eq 'Winget') {
+                    if (Install-WingetPackage -PackageName $appName -Version $appVer -Params $appParams -ForceInstall $ForceFlag) {
+                        $success = $true
+                        $actualSource = 'Winget'
+                    } elseif (Install-ChocoPackage -PackageName $appName -Version $appVer -Params $appParams -ForceInstall $ForceFlag) {
+                        $success = $true
+                        $actualSource = 'Choco'
+                    }
+                } else { # Preferred is Choco
+                    if (Install-ChocoPackage -PackageName $appName -Version $appVer -Params $appParams -ForceInstall $ForceFlag) {
+                        $success = $true
+                        $actualSource = 'Choco'
+                    } elseif ($UseWinget -and (Install-WingetPackage -PackageName $appName -Version $appVer -Params $appParams -ForceInstall $ForceFlag)) {
+                        $success = $true
+                        $actualSource = 'Winget'
+                    }
                 }
                 
                 # Handle Pinning
                 $policy = Get-PackagePolicy
-                if ($policy.pinned -contains $appName.ToLower()) {
-                    if ($source -eq 'Winget') { Set-WingetPin -PackageName $appName } else { Set-ChocoPin -PackageName $appName }
+                if ($success -and $policy.pinned -contains $appName.ToLower()) {
+                    if ($actualSource -eq 'Winget') {
+                        Set-WingetPin -PackageName $appName
+                    } elseif ($actualSource -eq 'Choco') {
+                        Set-ChocoPin -PackageName $appName
+                    }
                 }
             }
         }
@@ -234,13 +249,38 @@ function Invoke-MainWorkflow {
             foreach ($app in $applications) {
                 $appName = if ($app.name) { $app.name } else { $app.Name }
                 $appVer = if ($app.version) { $app.version } else { $app.Version }
-                Update-ChocoPackage -PackageName $appName -Version $appVer
+
+                # Detect which manager is responsible for the package
+                $isChoco = Test-PackageInstalled -PackageName $appName -ChocoOnly
+                $isWinget = Test-PackageInstalled -PackageName $appName -WingetOnly
+
+                if ($isChoco) {
+                    Update-ChocoPackage -PackageName $appName -Version $appVer
+                } elseif ($isWinget) {
+                    Update-WingetPackage -PackageName $appName -Version $appVer
+                } else {
+                    Write-WarningMsg "Could not find '$appName' managed by Choco or Winget. Skipping update."
+                }
             }
         }
         'Uninstall' {
             foreach ($app in $applications) {
                 $appName = if ($app.name) { $app.name } else { $app.Name }
-                Uninstall-ChocoPackage -PackageName $appName
+                
+                if (-not (Test-PackageInstalled -PackageName $appName)) {
+                    Write-WarningMsg "Package '$appName' is not installed. Skipping uninstall."
+                    continue
+                }
+
+                # Try uninstalling via Choco first. If it succeeds or finds nothing, try Winget.
+                $uninstalled = Uninstall-ChocoPackage -PackageName $appName
+                if (-not $uninstalled) {
+                    $uninstalled = Uninstall-WingetPackage -PackageName $appName
+                }
+
+                if (-not $uninstalled) {
+                    Write-ErrorMsg "Could not uninstall '$appName'. It may be a manually installed application."
+                }
             }
         }
         'List' {
