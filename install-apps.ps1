@@ -190,6 +190,11 @@ function Invoke-MainWorkflow {
         }
     } else {
         $selectedPreset = Show-PresetMenu -RootPath $AppRoot
+        if (-not $selectedPreset) {
+            # User chose to go back to the main menu from the preset selection
+            return 'BACK'
+        }
+
         if ($selectedPreset -eq 'custom') {
             $applications = Show-CustomSelectionMenu -Mode $ExecutionMode -RootPath $AppRoot -GitHubRepo $GitHubRepo
         } else {
@@ -328,5 +333,8 @@ if ($Action -or $Preset -or $ConfigFile) {
 
 while ($continueRunning) {
     $result = Invoke-MainWorkflow -ExecutionMode $Mode -ForceFlag $Force
+    if ($result -eq 'BACK') {
+        continue
+    }
     if ($result) { $continueRunning = Show-ContinuePrompt } else { $continueRunning = $false }
 }

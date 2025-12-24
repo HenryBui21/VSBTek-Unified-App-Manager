@@ -214,14 +214,14 @@ function Show-PresetMenu {
             $i++
         }
         Write-Host "  $i. Custom Selection"
-        Write-Host "  $($i+1). Cancel"
+        Write-Host "  $($i+1). Back to Main Menu"
 
         $choice = Read-Host "Enter your choice (1-$($i+1))"
         if ($choice -match '^\d+$') {
             $val = [int]$choice
             if ($val -ge 1 -and $val -le $presets.Count) { return $presets[$val-1].ID }
             elseif ($val -eq ($presets.Count + 1)) { return 'custom' }
-            elseif ($val -eq ($presets.Count + 2)) { exit 0 }
+            elseif ($val -eq ($presets.Count + 2)) { return $null }
         }
     }
 }
