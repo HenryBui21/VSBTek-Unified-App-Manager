@@ -409,4 +409,4 @@ function Show-ContinuePrompt {
     return $true
 }
 
-Export-ModuleMember -Function Show-CustomSelectionMenu, Show-InstalledPackages, Show-MainMenu, Show-PresetMenu, Show-ContinuePrompt
+Export-ModuleMember -Function Show-CustomSelectionMenu, Show-InstalledPackages, Show-MainMenu, Show-PresetMenu, Show-PolicyMenu, Show-ContinuePrompt

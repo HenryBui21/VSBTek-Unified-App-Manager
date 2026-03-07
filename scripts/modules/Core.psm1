@@ -2,18 +2,17 @@
 function Update-SessionEnvironment {
     Write-Host "Refreshing environment variables..." -ForegroundColor Cyan
 
-    $locations = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment',
-                 'HKCU:\Environment'
+    # Properly merge Machine and User paths
+    $machinePath = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $userPath    = [System.Environment]::GetEnvironmentVariable('Path', 'User')
+    $env:Path = "$machinePath;$userPath"
 
-    $locations | ForEach-Object {
-        $k = Get-Item $_
-        $k.GetValueNames() | ForEach-Object {
-            $name = $_
-            $value = $k.GetValue($name)
-            if ($name -eq 'Path') {
-                $env:Path = $value
-            } else {
-                Set-Item -Path "Env:\$name" -Value $value
+    # Refresh other variables
+    foreach ($scope in 'Machine', 'User') {
+        foreach ($key in [System.Environment]::GetEnvironmentVariables($scope).Keys) {
+            if ($key -ine 'Path') {
+                $val = [System.Environment]::GetEnvironmentVariable($key, $scope)
+                Set-Item -Path "Env:\$key" -Value $val
             }
         }
     }
