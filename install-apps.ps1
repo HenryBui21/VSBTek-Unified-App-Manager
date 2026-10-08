@@ -211,15 +211,23 @@ function Invoke-MainWorkflow {
     }
 
     # Execute Action
+    # Temporarily enable progress bar (global SilentlyContinue suppresses Write-Progress)
+    $prevProgressPreference = $ProgressPreference
+    $ProgressPreference = 'Continue'
     switch ($selectedAction) {
         'Install' {
             # Optimization: Pre-check status?
             # For now, we stick to sequential install to ensure Winget/Choco stability
+            $total = $applications.Count
+            $i = 0
             foreach ($app in $applications) {
+                $i++
                 $appName = if ($app.name) { $app.name } else { $app.Name }
                 $appVer = if ($app.version) { $app.version } else { $app.Version }
                 $appParams = if ($app.params) { $app.params } else { $app.Params }
-                
+
+                Write-Progress -Activity "Installing applications" -Status "[$i/$total] $appName" -PercentComplete ([int](($i - 1) * 100 / $total))
+
                 $preferredSource = Get-PreferredSource -AppName $appName -UseWinget $UseWinget
                 $actualSource = $null
                 $success = $false
@@ -254,9 +262,14 @@ function Invoke-MainWorkflow {
             }
         }
         'Update' {
+            $total = $applications.Count
+            $i = 0
             foreach ($app in $applications) {
+                $i++
                 $appName = if ($app.name) { $app.name } else { $app.Name }
                 $appVer = if ($app.version) { $app.version } else { $app.Version }
+
+                Write-Progress -Activity "Updating applications" -Status "[$i/$total] $appName" -PercentComplete ([int](($i - 1) * 100 / $total))
 
                 # Detect which manager is responsible for the package
                 $isChoco = Test-PackageInstalled -PackageName $appName -ChocoOnly
@@ -272,9 +285,14 @@ function Invoke-MainWorkflow {
             }
         }
         'Uninstall' {
+            $total = $applications.Count
+            $i = 0
             foreach ($app in $applications) {
+                $i++
                 $appName = if ($app.name) { $app.name } else { $app.Name }
-                
+
+                Write-Progress -Activity "Uninstalling applications" -Status "[$i/$total] $appName" -PercentComplete ([int](($i - 1) * 100 / $total))
+
                 if (-not (Test-PackageInstalled -PackageName $appName)) {
                     Write-WarningMsg "Package '$appName' is not installed. Skipping uninstall."
                     continue
@@ -296,6 +314,8 @@ function Invoke-MainWorkflow {
             Show-InstalledPackages -Applications $applications
         }
     }
+    Write-Progress -Activity "Processing applications" -Completed
+    $ProgressPreference = $prevProgressPreference
 
     return $true
 }
