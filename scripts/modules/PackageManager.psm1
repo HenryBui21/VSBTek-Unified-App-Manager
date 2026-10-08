@@ -279,31 +279,48 @@ function Install-Winget {
             Invoke-WebRequest -Uri $xamlUrl -OutFile $xamlPath -UseBasicParsing -TimeoutSec 120
             Add-AppxPackage -Path $xamlPath -ErrorAction Stop
         }
+
         # 2. Query latest Winget release from GitHub
         $releaseApiUrl = "https://api.github.com/repos/microsoft/winget-cli/releases/latest"
         Write-Host "  Querying latest Winget release from GitHub..." -ForegroundColor Gray
         $releaseInfo = Invoke-RestMethod -Uri $releaseApiUrl -UseBasicParsing -TimeoutSec 15
         
         $bundleAsset = $releaseInfo.assets | Where-Object { $_.name -like '*.msixbundle' } | Select-Object -First 1
+        $depsZipAsset = $releaseInfo.assets | Where-Object { $_.name -like '*Dependencies.zip' } | Select-Object -First 1
         $vclibsAsset = $releaseInfo.assets | Where-Object { $_.name -like "*VCLibs*$arch*.appx" -or $_.name -like '*VCLibs*.appx' } | Select-Object -First 1
 
         if (-not $bundleAsset) {
             throw "Could not find .msixbundle in latest Winget release assets."
         }
 
-        # 3. Dependency: VCLibs
-        $hasVCLibs = [bool](Get-AppxPackage -Name "Microsoft.VCLibs.140.00.UWPDesktop*" -ErrorAction SilentlyContinue)
-        if (-not $hasVCLibs) {
-            $vclibsPath = Join-Path $tempDir "VCLibs.appx"
-            if ($vclibsAsset) {
-                Write-Host "  Downloading dependency: $($vclibsAsset.name)" -ForegroundColor Gray
-                Invoke-WebRequest -Uri $vclibsAsset.browser_download_url -OutFile $vclibsPath -UseBasicParsing -TimeoutSec 120
-            } else {
-                $vclibsUrl = "https://aka.ms/Microsoft.VCLibs.$arch.14.00.Desktop.appx"
-                Write-Host "  Downloading dependency: VCLibs ($arch)..." -ForegroundColor Gray
-                Invoke-WebRequest -Uri $vclibsUrl -OutFile $vclibsPath -UseBasicParsing -TimeoutSec 120
+        # 3. Dependencies from official release bundle (VCLibs & WindowsAppRuntime)
+        if ($depsZipAsset) {
+            Write-Host "  Downloading Winget dependencies bundle..." -ForegroundColor Gray
+            $depsZipPath = Join-Path $tempDir "Dependencies.zip"
+            $depsExtractPath = Join-Path $tempDir "Dependencies"
+            Invoke-WebRequest -Uri $depsZipAsset.browser_download_url -OutFile $depsZipPath -UseBasicParsing -TimeoutSec 180
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($depsZipPath, $depsExtractPath)
+
+            $archDepFiles = Get-ChildItem -Path (Join-Path $depsExtractPath $arch) -Filter "*.appx" -ErrorAction SilentlyContinue
+            foreach ($depFile in $archDepFiles) {
+                Write-Host "  Installing dependency: $($depFile.Name)..." -ForegroundColor Gray
+                Add-AppxPackage -Path $depFile.FullName -ErrorAction SilentlyContinue
             }
-            Add-AppxPackage -Path $vclibsPath -ErrorAction Stop
+        } else {
+            # Fallback: standalone VCLibs download if release lacks Dependencies.zip
+            $hasVCLibs = [bool](Get-AppxPackage -Name "Microsoft.VCLibs.140.00.UWPDesktop*" -ErrorAction SilentlyContinue)
+            if (-not $hasVCLibs) {
+                $vclibsPath = Join-Path $tempDir "VCLibs.appx"
+                if ($vclibsAsset) {
+                    Write-Host "  Downloading dependency: $($vclibsAsset.name)" -ForegroundColor Gray
+                    Invoke-WebRequest -Uri $vclibsAsset.browser_download_url -OutFile $vclibsPath -UseBasicParsing -TimeoutSec 120
+                } else {
+                    $vclibsUrl = "https://aka.ms/Microsoft.VCLibs.$arch.14.00.Desktop.appx"
+                    Write-Host "  Downloading dependency: VCLibs ($arch)..." -ForegroundColor Gray
+                    Invoke-WebRequest -Uri $vclibsUrl -OutFile $vclibsPath -UseBasicParsing -TimeoutSec 120
+                }
+                Add-AppxPackage -Path $vclibsPath -ErrorAction Stop
+            }
         }
 
         # 4. Main package: DesktopAppInstaller msixbundle
