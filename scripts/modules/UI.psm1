@@ -41,7 +41,9 @@ function Show-CustomSelectionMenu {
             }
         }
 
-        $selection = Read-Host "`nEnter numbers (e.g. 1,3,5-7), 'all', or 'cancel'"
+        $categoryNames = @($groupedApps | ForEach-Object { $_.Name })
+
+        $selection = Read-Host "`nEnter numbers (e.g. 1,3,5-7), category name (e.g. 'Dev Tools'), 'all', or 'cancel'"
         if ($selection -eq 'cancel' -or [string]::IsNullOrWhiteSpace($selection)) { return @() }
         
         $selectedApps = @()
@@ -50,7 +52,10 @@ function Show-CustomSelectionMenu {
         } else {
             $parts = $selection -split ',' | ForEach-Object { $_.Trim() }
             foreach ($part in $parts) {
-                if ($part -match '^(\d+)-(\d+)$') {
+                if ($categoryNames -contains $part) {
+                    # Select whole category by name (case-insensitive)
+                    $selectedApps += @($appIndexMap.Values | Where-Object { $_.Category -eq $part })
+                } elseif ($part -match '^(\d+)-(\d+)$') {
                     for ($i = [int]$matches[1]; $i -le [int]$matches[2]; $i++) {
                         if ($appIndexMap.ContainsKey($i)) { $selectedApps += $appIndexMap[$i] }
                     }
