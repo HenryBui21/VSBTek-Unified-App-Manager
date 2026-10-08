@@ -4,6 +4,7 @@
 
 ### Added
 - **Package Manager Preflight**: Kiểm tra phiên bản Chocolatey và Winget (`choco --version`, `winget --version`) trước khi thực hiện bất kỳ thao tác Install/Update/Uninstall/Upgrade nào. Nếu Choco không phản hồi → hủy thao tác; nếu Winget không phản hồi → tự động fallback về Chocolatey.
+- **Stale Module Self-heal**: Nếu module cache trong `%TEMP%` cũ hơn script (thiếu function mới), script tự động tải lại module từ GitHub thay vì crash với `CommandNotFoundException`.
 
 ## [v2.0.0] - 2025-02-01 - Hybrid Engine & Smart GUI
 

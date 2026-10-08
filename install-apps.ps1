@@ -59,6 +59,44 @@ if (-not (Test-Path $ConfigPath))  { New-Item -ItemType Directory -Force -Path $
 
 $ModulesList = @("Logger.psm1", "Core.psm1", "Config.psm1", "Detection.psm1", "PackageManager.psm1", "UI.psm1")
 
+function Sync-VSBTekModules {
+    Write-Host "Initializing VSBTek App Manager..." -ForegroundColor Cyan
+    Write-Host "Downloading required modules to: $AppRoot" -ForegroundColor Gray
+
+    try {
+        $WebClient = New-Object System.Net.WebClient
+        $WebClient.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
+
+        foreach ($mod in $ModulesList) {
+            $modLocalPath = Join-Path $ModulesPath $mod
+            $url = "$GitHubRepo/scripts/modules/$mod"
+            $WebClient.DownloadFile($url, $modLocalPath)
+        }
+        return $true
+    } catch {
+        Write-Host "Failed to download required components. Please check your internet connection." -ForegroundColor Red
+        Write-Host "Source: $GitHubRepo" -ForegroundColor Red
+        Write-Host $_.Exception.Message -ForegroundColor Red
+        return $false
+    }
+}
+
+function Import-VSBTekModules {
+    foreach ($mod in $ModulesList) {
+        try {
+            # Get module name from filename (e.g., Logger.psm1 -> Logger)
+            $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($mod)
+            # Forcefully remove any cached version of the module from the current session
+            Remove-Module $moduleName -ErrorAction SilentlyContinue
+            # Import the fresh version
+            Import-Module (Join-Path $ModulesPath $mod) -Force -ErrorAction Stop
+        } catch {
+            Write-Warning "Failed to import module: $mod"
+            throw $_
+        }
+    }
+}
+
 # Check if we need to download modules (Self-healing / Remote execution)
 $missingModules = $false
 foreach ($mod in $ModulesList) {
@@ -69,40 +107,20 @@ foreach ($mod in $ModulesList) {
 }
 
 if ($missingModules -or $Mode -eq 'remote' -or $ForceUpdate) {
-    Write-Host "Initializing VSBTek App Manager..." -ForegroundColor Cyan
-    Write-Host "Downloading required modules to: $AppRoot" -ForegroundColor Gray
-    
-    try {
-        $WebClient = New-Object System.Net.WebClient
-        $WebClient.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
-        
-        # Download Modules
-        foreach ($mod in $ModulesList) {
-            $modLocalPath = Join-Path $ModulesPath $mod
-            $url = "$GitHubRepo/scripts/modules/$mod"
-            # The outer 'if' condition has already determined we need to download.
-            $WebClient.DownloadFile($url, $modLocalPath)
-        }
-    } catch {
-        Write-Error "Failed to download required components. Please check your internet connection."
-        Write-Error "Source: $GitHubRepo"
-        Write-Error $_.Exception.Message
-        exit 1
-    }
+    if (-not (Sync-VSBTekModules)) { exit 1 }
 }
 
-# Import Modules
-foreach ($mod in $ModulesList) {
-    try {
-        # Get module name from filename (e.g., Logger.psm1 -> Logger)
-        $moduleName = [System.IO.Path]::GetFileNameWithoutExtension($mod)
-        # Forcefully remove any cached version of the module from the current session
-        Remove-Module $moduleName -ErrorAction SilentlyContinue
-        # Import the fresh version
-        Import-Module (Join-Path $ModulesPath $mod) -Force -ErrorAction Stop
-    } catch {
-        Write-Warning "Failed to import module: $mod"
-        throw $_
+Import-VSBTekModules
+
+# Self-heal: cached modules may predate this script version (stale cache)
+# ponytail: sentinel = Get-PackageManagerStatus; replace with a module version file if more functions churn
+if (-not (Get-Command Get-PackageManagerStatus -ErrorAction SilentlyContinue)) {
+    Write-Host "[WARNING] Stale module cache detected. Re-downloading modules..." -ForegroundColor Yellow
+    if (-not (Sync-VSBTekModules)) { exit 1 }
+    Import-VSBTekModules
+    if (-not (Get-Command Get-PackageManagerStatus -ErrorAction SilentlyContinue)) {
+        Write-Host "[ERROR] Modules are still outdated. GitHub may not have the latest module versions yet." -ForegroundColor Red
+        exit 1
     }
 }
 
