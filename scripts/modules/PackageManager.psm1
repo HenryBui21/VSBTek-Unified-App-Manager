@@ -223,12 +223,20 @@ function Set-ChocoPin {
 }
 
 function Install-Winget {
-    # This function checks for Winget. If not found, it attempts to install it.
-    # Returns $true if Winget is available after execution, $false otherwise.
-
+    # Check if winget command exists and is functional
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        # It's already here, no action needed.
-        return $true
+        try {
+            $ver = & winget --version 2>&1
+            if ($LASTEXITCODE -eq 0 -and $ver) { return $true }
+        } catch {}
+
+        # If present but broken source catalog, auto-repair
+        try {
+            Write-Host "  Winget catalog issue detected, resetting sources..." -ForegroundColor Yellow
+            & winget source reset --force 2>&1 | Out-Null
+            $ver = & winget --version 2>&1
+            if ($LASTEXITCODE -eq 0 -and $ver) { return $true }
+        } catch {}
     }
 
     # Check OS compatibility
@@ -238,53 +246,98 @@ function Install-Winget {
         return $false
     }
 
-    Write-Host "[INFO] Winget not found. Attempting to install from GitHub..." -ForegroundColor Cyan
+    # Add-AppxPackage fails under SYSTEM account (e.g. SCCM/Intune SYSTEM context)
+    if ([Security.Principal.WindowsIdentity]::GetCurrent().IsSystem) {
+        Write-WarningMsg "Winget cannot be installed under SYSTEM context. Falling back to Chocolatey."
+        return $false
+    }
+
+    # Ensure AppX Deployment Service (AppXSvc) is enabled and running
+    try {
+        $svc = Get-Service AppXSvc -ErrorAction SilentlyContinue
+        if ($svc) {
+            if ($svc.StartType -eq 'Disabled') { Set-Service AppXSvc -StartupType Manual -ErrorAction SilentlyContinue }
+            if ($svc.Status -ne 'Running') { Start-Service AppXSvc -ErrorAction SilentlyContinue }
+        }
+    } catch {}
+
+    Write-Host "[INFO] Winget not found or needs setup. Installing dependencies..." -ForegroundColor Cyan
     $tempDir = Join-Path $env:TEMP "winget-install-temp"
     if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir | Out-Null }
     
     try {
-        # Use GitHub API to find the latest release asset
+        $arch = if ([Environment]::Is64BitOperatingSystem) {
+            if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+        } else { 'x86' }
+
+        # 1. Dependency: Microsoft.UI.Xaml.2.8 (fixes 0x80073CF3 on clean/LTSC systems)
+        $hasXaml = [bool](Get-AppxPackage -Name "Microsoft.UI.Xaml.2.8*" -ErrorAction SilentlyContinue)
+        if (-not $hasXaml) {
+            Write-Host "  Installing dependency: Microsoft.UI.Xaml.2.8 ($arch)..." -ForegroundColor Gray
+            $xamlUrl = "https://github.com/microsoft/microsoft-ui-xaml/releases/download/v2.8.6/Microsoft.UI.Xaml.2.8.$arch.appx"
+            $xamlPath = Join-Path $tempDir "Microsoft.UI.Xaml.2.8.$arch.appx"
+            Invoke-WebRequest -Uri $xamlUrl -OutFile $xamlPath -UseBasicParsing -TimeoutSec 120
+            Add-AppxPackage -Path $xamlPath -ErrorAction Stop
+        }
+        # 2. Query latest Winget release from GitHub
         $releaseApiUrl = "https://api.github.com/repos/microsoft/winget-cli/releases/latest"
-        Write-Host "  Querying latest release from GitHub..." -ForegroundColor Gray
+        Write-Host "  Querying latest Winget release from GitHub..." -ForegroundColor Gray
         $releaseInfo = Invoke-RestMethod -Uri $releaseApiUrl -UseBasicParsing -TimeoutSec 15
         
-        $bundleAsset = $releaseInfo.assets | Where-Object { $_.name -like '*.msixbundle' }
-        $dependencyAsset = $releaseInfo.assets | Where-Object { $_.name -like '*VCLibs*.appx' }
+        $bundleAsset = $releaseInfo.assets | Where-Object { $_.name -like '*.msixbundle' } | Select-Object -First 1
+        $vclibsAsset = $releaseInfo.assets | Where-Object { $_.name -like "*VCLibs*$arch*.appx" -or $_.name -like '*VCLibs*.appx' } | Select-Object -First 1
 
         if (-not $bundleAsset) {
-            throw "Could not find .msixbundle in the latest Winget release assets."
+            throw "Could not find .msixbundle in latest Winget release assets."
         }
 
-        # Download and install dependency if it exists
-        if ($dependencyAsset) {
-            $dependencyPath = Join-Path $tempDir $dependencyAsset.name
-            Write-Host "  Downloading dependency: $($dependencyAsset.name)" -ForegroundColor Gray
-            Invoke-WebRequest -Uri $dependencyAsset.browser_download_url -OutFile $dependencyPath -UseBasicParsing -TimeoutSec 120
-            
-            Write-Host "  Installing dependency..." -ForegroundColor Gray
-            Add-AppxPackage -Path $dependencyPath | Out-Null
+        # 3. Dependency: VCLibs
+        $hasVCLibs = [bool](Get-AppxPackage -Name "Microsoft.VCLibs.140.00.UWPDesktop*" -ErrorAction SilentlyContinue)
+        if (-not $hasVCLibs) {
+            $vclibsPath = Join-Path $tempDir "VCLibs.appx"
+            if ($vclibsAsset) {
+                Write-Host "  Downloading dependency: $($vclibsAsset.name)" -ForegroundColor Gray
+                Invoke-WebRequest -Uri $vclibsAsset.browser_download_url -OutFile $vclibsPath -UseBasicParsing -TimeoutSec 120
+            } else {
+                $vclibsUrl = "https://aka.ms/Microsoft.VCLibs.$arch.14.00.Desktop.appx"
+                Write-Host "  Downloading dependency: VCLibs ($arch)..." -ForegroundColor Gray
+                Invoke-WebRequest -Uri $vclibsUrl -OutFile $vclibsPath -UseBasicParsing -TimeoutSec 120
+            }
+            Add-AppxPackage -Path $vclibsPath -ErrorAction Stop
         }
 
-        # Download and install main package
+        # 4. Main package: DesktopAppInstaller msixbundle
         $bundlePath = Join-Path $tempDir $bundleAsset.name
-        Write-Host "  Downloading main package: $($bundleAsset.name)" -ForegroundColor Gray
-        Invoke-WebRequest -Uri $bundleAsset.browser_download_url -OutFile $bundlePath -UseBasicParsing -TimeoutSec 120
+        Write-Host "  Downloading Winget bundle: $($bundleAsset.name)..." -ForegroundColor Gray
+        Invoke-WebRequest -Uri $bundleAsset.browser_download_url -OutFile $bundlePath -UseBasicParsing -TimeoutSec 180
 
-        Write-Host "  Installing main package..." -ForegroundColor Gray
-        Add-AppxPackage -Path $bundlePath | Out-Null
+        Write-Host "  Installing Winget package..." -ForegroundColor Gray
+        Add-AppxPackage -Path $bundlePath -ErrorAction Stop
+
+        # Refresh PATH for current session
+        $winApps = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps"
+        if ((Test-Path $winApps) -and ($env:Path -notlike "*$winApps*")) {
+            $env:Path = "$winApps;$env:Path"
+        }
+
+        if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            $foundWinget = Get-ChildItem -Path "$env:ProgramFiles\WindowsApps" -Filter "winget.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($foundWinget) {
+                $env:Path = "$($foundWinget.DirectoryName);$env:Path"
+            }
+        }
 
         if (Get-Command winget -ErrorAction SilentlyContinue) {
+            & winget --version 2>&1 | Out-Null
             Write-Host "[OK] Winget installed successfully." -ForegroundColor Green
             return $true
         }
-        throw "Winget installation seemed to succeed, but the 'winget' command is not available."
+        throw "Winget installed but command is not available in PATH."
     } catch {
         Write-ErrorMsg "Failed to automatically install Winget: $($_.Exception.Message)"
-        Write-WarningMsg "This can happen if a required dependency is missing or if there's a conflict with an existing 'App Installer' version."
-        Write-WarningMsg "Please try installing/updating 'App Installer' from the Microsoft Store first, then run this script again."
+        Write-WarningMsg "System may lack Microsoft Store framework or AppX support. Falling back to Chocolatey."
         return $false
     } finally {
-        # Clean up downloaded files
         if (Test-Path $tempDir) { Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue }
     }
 }
@@ -318,11 +371,11 @@ function Install-WingetPackage {
             Write-Host "[OK] $PackageName installed successfully via Winget" -ForegroundColor Green
             return $true
         } else {
-            # Check for specific certificate error
-            if ($output -join ' ' -match '0x8a15005e') {
-                Write-Host "[ERROR] Winget install failed for $PackageName with a certificate error (0x8a15005e)." -ForegroundColor Red
-                Write-Host "  This is often caused by a network proxy/firewall or an outdated Winget client." -ForegroundColor Yellow
-                Write-Host "  Try updating 'App Installer' from the Microsoft Store or running 'winget source reset --force'." -ForegroundColor Yellow
+            # Check for specific certificate or source catalog corruption error
+            if ($output -join ' ' -match '0x8a15005e|0x80190194') {
+                Write-Host "[ERROR] Winget install failed for $PackageName (Source/Network error)." -ForegroundColor Red
+                Write-Host "  Attempting auto-recovery: resetting Winget source catalog..." -ForegroundColor Yellow
+                & winget source reset --force 2>&1 | Out-Null
             } else {
                 Write-Host "[ERROR] Winget install failed for $PackageName (Code: $LASTEXITCODE)" -ForegroundColor Red
             }
@@ -368,7 +421,13 @@ function Update-WingetPackage {
                     Write-Host "[INFO] $PackageName is already at the latest version available via Winget." -ForegroundColor Cyan
                     return $true
                 }
-                Write-Host "[ERROR] Winget update failed for $PackageName (Code: $LASTEXITCODE)" -ForegroundColor Red
+                if ($output -join ' ' -match '0x8a15005e|0x80190194') {
+                    Write-Host "[ERROR] Winget update failed for $PackageName (Source/Network error)." -ForegroundColor Red
+                    Write-Host "  Attempting auto-recovery: resetting Winget source catalog..." -ForegroundColor Yellow
+                    & winget source reset --force 2>&1 | Out-Null
+                } else {
+                    Write-Host "[ERROR] Winget update failed for $PackageName (Code: $LASTEXITCODE)" -ForegroundColor Red
+                }
             }
             if ($output) {
                 $errLines = $output | Where-Object { $_ -and $_.ToString().Trim() -ne '' } | Select-Object -Last 3

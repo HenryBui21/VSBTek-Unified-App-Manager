@@ -22,6 +22,12 @@ function Update-SessionEnvironment {
     if ($env:Path -notlike "*$chocoPath*") {
         $env:Path = "$env:Path;$chocoPath"
     }
+
+    # Append WindowsApps (winget) to path if not already there
+    $winAppsPath = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
+    if ((Test-Path $winAppsPath) -and ($env:Path -notlike "*$winAppsPath*")) {
+        $env:Path = "$env:Path;$winAppsPath"
+    }
 }
 
 function Test-Administrator {
