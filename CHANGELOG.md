@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Package Manager Preflight**: Kiểm tra phiên bản Chocolatey và Winget (`choco --version`, `winget --version`) trước khi thực hiện bất kỳ thao tác Install/Update/Uninstall/Upgrade nào. Nếu Choco không phản hồi → hủy thao tác; nếu Winget không phản hồi → tự động fallback về Chocolatey.
+
 ## [v2.0.0] - 2025-02-01 - Hybrid Engine & Smart GUI
 
 ### Added

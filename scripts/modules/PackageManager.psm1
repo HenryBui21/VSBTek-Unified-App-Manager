@@ -524,6 +524,51 @@ function Set-WingetPin {
     }
 }
 
+function Get-PackageManagerStatus {
+    param([bool]$WingetEnabled = $false)
+
+    $status = [pscustomobject]@{
+        ChocoReady    = $false
+        ChocoVersion  = $null
+        WingetReady   = $false
+        WingetVersion = $null
+    }
+
+    Write-Host "[INFO] Checking package manager versions..." -ForegroundColor Cyan
+
+    try {
+        if (Get-Command choco -ErrorAction SilentlyContinue) {
+            $v = (& choco --version 2>$null | Select-Object -First 1)
+            if ($v) {
+                $status.ChocoReady = $true
+                $status.ChocoVersion = "$v".Trim()
+                Write-Host "[OK] Chocolatey $($status.ChocoVersion)" -ForegroundColor Green
+            }
+        }
+    } catch {}
+    if (-not $status.ChocoReady) {
+        Write-Host "[ERROR] Chocolatey is not available or not responding." -ForegroundColor Red
+    }
+
+    if ($WingetEnabled) {
+        try {
+            if (Get-Command winget -ErrorAction SilentlyContinue) {
+                $v = (& winget --version 2>$null | Select-Object -First 1)
+                if ($v) {
+                    $status.WingetReady = $true
+                    $status.WingetVersion = "$v".Trim()
+                    Write-Host "[OK] Winget $($status.WingetVersion)" -ForegroundColor Green
+                }
+            }
+        } catch {}
+        if (-not $status.WingetReady) {
+            Write-Host "[WARNING] Winget is not available or not responding. Falling back to Chocolatey." -ForegroundColor Yellow
+        }
+    }
+
+    return $status
+}
+
 function Get-PreferredSource {
     param([string]$AppName, [bool]$UseWinget, [string]$ExplicitSource = $null)
     
@@ -592,4 +637,4 @@ function Invoke-UpgradeAll {
     }
 }
 
-Export-ModuleMember -Function Compare-Versions, Install-Chocolatey, Install-ChocoPackage, Update-ChocoPackage, Uninstall-ChocoPackage, Set-ChocoPin, Install-Winget, Install-WingetPackage, Update-WingetPackage, Uninstall-WingetPackage, Set-WingetPin, Get-PreferredSource, Invoke-UpgradeAll
+Export-ModuleMember -Function Compare-Versions, Install-Chocolatey, Install-ChocoPackage, Update-ChocoPackage, Uninstall-ChocoPackage, Set-ChocoPin, Install-Winget, Install-WingetPackage, Update-WingetPackage, Uninstall-WingetPackage, Set-WingetPin, Get-PackageManagerStatus, Get-PreferredSource, Invoke-UpgradeAll

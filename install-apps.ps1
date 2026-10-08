@@ -179,6 +179,15 @@ function Invoke-MainWorkflow {
     Write-Host ""
     Write-ColorOutput "Selected Action: $selectedAction" -Color Yellow
 
+    # Preflight: verify Choco/Winget availability and versions before any operation
+    $pmStatus = Get-PackageManagerStatus -WingetEnabled $UseWinget
+    if (-not $pmStatus.ChocoReady) {
+        Write-ErrorMsg "Chocolatey is required but not responding. Please re-run the script to reinstall it."
+        return $true
+    }
+    if (-not $pmStatus.WingetReady) { $UseWinget = $false }
+    Write-Host ""
+
     if ($selectedAction -eq 'Upgrade') {
         Invoke-UpgradeAll
         return $true
