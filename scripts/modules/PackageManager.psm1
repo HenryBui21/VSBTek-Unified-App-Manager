@@ -263,9 +263,10 @@ function Install-Winget {
 
     Write-Host "[INFO] Winget not found or needs setup. Installing dependencies..." -ForegroundColor Cyan
     $tempDir = Join-Path $env:TEMP "winget-install-temp"
-    if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir | Out-Null }
-    
+
     try {
+        if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Path $tempDir | Out-Null }
+
         $arch = if ([Environment]::Is64BitOperatingSystem) {
             if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
         } else { 'x86' }
@@ -299,6 +300,8 @@ function Install-Winget {
             $depsZipPath = Join-Path $tempDir "Dependencies.zip"
             $depsExtractPath = Join-Path $tempDir "Dependencies"
             Invoke-WebRequest -Uri $depsZipAsset.browser_download_url -OutFile $depsZipPath -UseBasicParsing -TimeoutSec 180
+            # ExtractToDirectory throws if leftover files exist from a previously killed run
+            if (Test-Path $depsExtractPath) { Remove-Item -Path $depsExtractPath -Recurse -Force -ErrorAction SilentlyContinue }
             [System.IO.Compression.ZipFile]::ExtractToDirectory($depsZipPath, $depsExtractPath)
 
             $archDepFiles = Get-ChildItem -Path (Join-Path $depsExtractPath $arch) -Filter "*.appx" -ErrorAction SilentlyContinue
@@ -345,9 +348,12 @@ function Install-Winget {
         }
 
         if (Get-Command winget -ErrorAction SilentlyContinue) {
-            & winget --version 2>&1 | Out-Null
-            Write-Host "[OK] Winget installed successfully." -ForegroundColor Green
-            return $true
+            $ver = & winget --version 2>&1
+            if ($LASTEXITCODE -eq 0 -and $ver) {
+                Write-Host "[OK] Winget installed successfully." -ForegroundColor Green
+                return $true
+            }
+            throw "Winget package installed but 'winget --version' failed (exit code: $LASTEXITCODE)."
         }
         throw "Winget installed but command is not available in PATH."
     } catch {
