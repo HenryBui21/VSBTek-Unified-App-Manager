@@ -30,4 +30,38 @@ function Test-Administrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-Export-ModuleMember -Function Update-SessionEnvironment, Test-Administrator
+function Disable-ConsoleQuickEdit {
+    try {
+        if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { return }
+
+        $code = @"
+        using System;
+        using System.Runtime.InteropServices;
+        public static class ConsoleQuickEditHelper {
+            const int STD_INPUT_HANDLE = -10;
+            const uint ENABLE_QUICK_EDIT_MODE = 0x0040;
+            const uint ENABLE_EXTENDED_FLAGS = 0x0080;
+            [DllImport("kernel32.dll", SetLastError = true)]
+            static extern IntPtr GetStdHandle(int nStdHandle);
+            [DllImport("kernel32.dll", SetLastError = true)]
+            static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+            [DllImport("kernel32.dll", SetLastError = true)]
+            static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+            public static void Disable() {
+                IntPtr handle = GetStdHandle(STD_INPUT_HANDLE);
+                if (handle != IntPtr.Zero && GetConsoleMode(handle, out uint mode)) {
+                    mode &= ~ENABLE_QUICK_EDIT_MODE;
+                    mode |= ENABLE_EXTENDED_FLAGS;
+                    SetConsoleMode(handle, mode);
+                }
+            }
+        }
+"@
+        if (-not ([System.Management.Automation.PSTypeName]'ConsoleQuickEditHelper').Type) {
+            Add-Type -TypeDefinition $code -ErrorAction SilentlyContinue
+        }
+        [ConsoleQuickEditHelper]::Disable()
+    } catch {}
+}
+
+Export-ModuleMember -Function Update-SessionEnvironment, Test-Administrator, Disable-ConsoleQuickEdit

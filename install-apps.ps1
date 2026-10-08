@@ -110,6 +110,7 @@ foreach ($mod in $ModulesList) {
 # We pass AppRoot so modules know where to look for configs
 Initialize-Detection -RootPath $AppRoot -GitHubRepo $GitHubRepo
 Import-PackagePolicy -RootPath $AppRoot
+Disable-ConsoleQuickEdit
 
 # ============================================================================
 # AUTO-ELEVATION

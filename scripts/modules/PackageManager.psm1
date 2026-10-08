@@ -75,7 +75,7 @@ function Install-ChocoPackage {
             Write-Host "  Parameters: $($Params -join ' ')" -ForegroundColor Cyan
         }
 
-        $null = & choco @chocoArgs 2>&1
+        $output = & choco @chocoArgs 2>&1
 
         if ($LASTEXITCODE -eq 0) {
             Write-Host "[OK] $PackageName installed successfully" -ForegroundColor Green
@@ -88,6 +88,10 @@ function Install-ChocoPackage {
             return $true
         } else {
             Write-Host "[ERROR] $PackageName installation failed (exit code: $LASTEXITCODE)" -ForegroundColor Red
+            if ($output) {
+                $errLines = $output | Where-Object { $_ -and $_.ToString().Trim() -ne '' } | Select-Object -Last 3
+                $errLines | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+            }
             return $false
         }
     }
@@ -145,7 +149,7 @@ function Update-ChocoPackage {
         $chocoArgs = @('upgrade', $PackageName, '-y', '--no-progress')
         if ($Version) { $chocoArgs += "--version=$Version" }
 
-        $null = & choco @chocoArgs 2>&1
+        $output = & choco @chocoArgs 2>&1
 
         if ($LASTEXITCODE -eq 0) {
             Write-Host "[OK] $PackageName updated successfully" -ForegroundColor Green
@@ -157,7 +161,11 @@ function Update-ChocoPackage {
             Write-Host "[OK] $PackageName updated successfully (reboot required)" -ForegroundColor Green
             return $true
         } else {
-            Write-Host "[ERROR] $PackageName update failed" -ForegroundColor Red
+            Write-Host "[ERROR] $PackageName update failed (exit code: $LASTEXITCODE)" -ForegroundColor Red
+            if ($output) {
+                $errLines = $output | Where-Object { $_ -and $_.ToString().Trim() -ne '' } | Select-Object -Last 3
+                $errLines | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+            }
             return $false
         }
     }
@@ -180,12 +188,16 @@ function Uninstall-ChocoPackage {
         }
         $chocoArgs = @('uninstall', $PackageName, '-y', '--no-progress')
         if ($ForceUninstall) { $chocoArgs += '--force' }
-        $null = & choco @chocoArgs 2>&1
+        $output = & choco @chocoArgs 2>&1
         if ($LASTEXITCODE -eq 0) {
             Write-Host "[OK] $PackageName uninstalled successfully" -ForegroundColor Green
             return $true
         } else {
             Write-Host "[WARNING] $PackageName uninstallation encountered issues" -ForegroundColor Yellow
+            if ($output) {
+                $errLines = $output | Where-Object { $_ -and $_.ToString().Trim() -ne '' } | Select-Object -Last 3
+                $errLines | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+            }
             return $false
         }
     } catch { return $false }
@@ -294,7 +306,7 @@ function Install-WingetPackage {
     }
 
     try {
-        $wingetArgs = @('install', '--id', $target, '--exact', '--accept-package-agreements', '--accept-source-agreements')
+        $wingetArgs = @('install', '--id', $target, '--exact', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity', '--silent')
         if ($Version) { $wingetArgs += '--version'; $wingetArgs += $Version }
         if ($ForceInstall) { $wingetArgs += '--force' }
         if ($Params.Count -gt 0) { $wingetArgs += '--override'; $wingetArgs += ($Params -join ' ') }
@@ -313,6 +325,10 @@ function Install-WingetPackage {
                 Write-Host "  Try updating 'App Installer' from the Microsoft Store or running 'winget source reset --force'." -ForegroundColor Yellow
             } else {
                 Write-Host "[ERROR] Winget install failed for $PackageName (Code: $LASTEXITCODE)" -ForegroundColor Red
+            }
+            if ($output) {
+                $errLines = $output | Where-Object { $_ -and $_.ToString().Trim() -ne '' } | Select-Object -Last 3
+                $errLines | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
             }
             return $false
         }
@@ -334,7 +350,7 @@ function Update-WingetPackage {
     }
 
     try {
-        $wingetArgs = @('upgrade', '--id', $target, '--exact', '--accept-package-agreements', '--accept-source-agreements')
+        $wingetArgs = @('upgrade', '--id', $target, '--exact', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity', '--silent')
         if ($Version) { $wingetArgs += '--version'; $wingetArgs += $Version }
         
         $output = & winget @wingetArgs 2>&1
@@ -353,6 +369,10 @@ function Update-WingetPackage {
                     return $true
                 }
                 Write-Host "[ERROR] Winget update failed for $PackageName (Code: $LASTEXITCODE)" -ForegroundColor Red
+            }
+            if ($output) {
+                $errLines = $output | Where-Object { $_ -and $_.ToString().Trim() -ne '' } | Select-Object -Last 3
+                $errLines | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
             }
             return $false
         }
@@ -374,7 +394,7 @@ function Uninstall-WingetPackage {
     }
 
     try {
-        $wingetArgs = @('uninstall', '--id', $target, '--exact', '--accept-source-agreements')
+        $wingetArgs = @('uninstall', '--id', $target, '--exact', '--accept-source-agreements', '--disable-interactivity', '--silent')
         $output = & winget @wingetArgs 2>&1
 
         if ($LASTEXITCODE -eq 0) {
@@ -385,6 +405,10 @@ function Uninstall-WingetPackage {
                 Write-Host "[ERROR] Winget uninstall failed for $PackageName with a certificate error (0x8a15005e)." -ForegroundColor Red
             } else {
                 Write-Host "[ERROR] Winget uninstall failed for $PackageName (Code: $LASTEXITCODE)" -ForegroundColor Red
+            }
+            if ($output) {
+                $errLines = $output | Where-Object { $_ -and $_.ToString().Trim() -ne '' } | Select-Object -Last 3
+                $errLines | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
             }
             return $false
         }
@@ -465,7 +489,7 @@ function Invoke-UpgradeAll {
 
     Write-Host "`n[INFO] Phase 2/2: Upgrading Winget packages..." -ForegroundColor Cyan
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        $wingetArgs = @('upgrade', '--all', '--include-unknown', '--accept-package-agreements', '--accept-source-agreements')
+        $wingetArgs = @('upgrade', '--all', '--include-unknown', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity', '--silent')
 
         if ($pinnedPackages.Count -gt 0) {
             $excludedIds = @()
