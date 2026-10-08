@@ -271,7 +271,7 @@ function Get-RemoteChocoVersion {
     try {
         $output = choco search $Name --exact --limit-output 2>$null
         if ($output -match "^$([regex]::Escape($Name))\|(.+)$") {
-            return $matches[1]
+            return $matches[2]
         }
     } catch {}
     return $null
