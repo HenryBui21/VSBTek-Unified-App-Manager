@@ -61,11 +61,6 @@
       "params": []
     },
     {
-      "name": "vscode-python",
-      "version": null,
-      "params": []
-    },
-    {
       "name": "wsl-ubuntu-2004",
       "version": null,
       "params": []

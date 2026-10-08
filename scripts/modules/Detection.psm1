@@ -183,10 +183,20 @@ function Get-SearchNames {
 function Test-PackageInstalled {
     param(
         [string]$PackageName,
-        [switch]$ChocoOnly
+        [switch]$ChocoOnly,
+        [switch]$WingetOnly
     )
 
     try {
+        # WingetOnly: check winget list only
+        if ($WingetOnly) {
+            if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { return $false }
+            $target = Resolve-WingetId -Name $PackageName
+            $wingetList = Get-WingetListCache
+            if (-not $wingetList) { return $false }
+            return ($wingetList | Where-Object { $_ -match [regex]::Escape($target) }).Count -gt 0
+        }
+
         $chocoPackages = Get-ChocoPackagesCache
 
         if ($chocoPackages.ContainsKey($PackageName)) {
